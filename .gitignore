@@ -50,3 +50,16 @@ rsconnect/
 
 # MacOS system files
 .DS_Store
+
+# Output files or catalogues
+/Results
+/Source
+/DATA
+/DB
+*.xml
+*.png
+*.jpg
+*.pdf
+*.gz
+*.html
+nohup.out
