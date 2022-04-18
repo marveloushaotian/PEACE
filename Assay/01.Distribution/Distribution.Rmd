@@ -1,5 +1,5 @@
 ---
-title: "**Preliminary Analysis**"
+title: "**Distribution**"
 author: "Haotian Zheng"
 date: "24/01/2022"
 output: html_document
@@ -49,9 +49,9 @@ color10 <- c('#8DD3C7', '#FFFFB3', '#BEBADA', '#FB8072', '#80B1D3', '#FDB462', '
 ### Import combined and filtered origin data.
 ```{r}
 # combined_data <- read.delim("../Results/2.Combined_Data/final_combined2.txt",header = T, check.names = F)
-defensefinder_padloc_combined_data <- read.delim("../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Final_data.txt",header = T, check.names = F)
-cctyper_data <- read.table("../Results/2.Combined_Data/Process_file/3.cctyper_data/cctyper_combined.txt",header = T,check.names = F)
-metadata_plsdb <- read.delim("../Results/1.Original_Data/plsdb_metadata.txt",header = T,sep = "\t")
+defensefinder_padloc_combined_data <- read.delim("../../Results/00.Original_Data/04.combined_data/DefenseFinder_Padloc_Combine/Final_data.txt",header = T, check.names = F)
+cctyper_data <- read.table("../../Results/00.Original_Data/03.cctyper_data/cctyper_combined_mar.txt",header = T,check.names = F)
+metadata_plsdb <- read.delim("../../Results/00.Original_Data/00.meta_data/plsdb_metadata_mar.txt",header = T,sep = "\t")
 cctyper_data2 <- left_join(cctyper_data[,c(-2)],metadata_plsdb)
 cctyper_data3 <- cctyper_data2 %>% filter(cctyper_data2$Source != "CCTyper_Crispr")
 combined_data <- rbind(defensefinder_padloc_combined_data,cctyper_data3)
@@ -59,9 +59,9 @@ combined_data <- rbind(defensefinder_padloc_combined_data,cctyper_data3)
 combined_data2 <- combined_data %>% filter(combined_data$Plasmid_ID != "NZ_CP069303.1")
 # write.table(combined_data2, "../Results/3.Preliminary_Analysis/all_combined_data.txt", sep = "\t", row.names = F)
 
-argonaute_origin <- read.table("../Results/1.Original_Data/argonaute_origin_file.txt",header = T, check.names = F, sep = "\t")
-argonaute_selected <- read.table("../Results/1.Original_Data/argonaute_selected_file.txt", header = T, check.names = F, sep = "\t")
-combined_data2 <- read.table("../Results/3.Preliminary_Analysis/all_combined_data.txt", header = T, check.names = F, sep = "\t")
+argonaute_origin <- read.table("../../Results/00.Original_Data/10.argonaute_data/argonaute_origin_data.txt",header = T, check.names = F, sep = "\t")
+argonaute_selected <- read.table("../../Results/00.Original_Data/10.argonaute_data/argonaute_selected_file.txt", header = T, check.names = F, sep = "\t")
+combined_data2 <- read.table("../../Results/00.Original_Data/all_combined_data.txt", header = T, check.names = F, sep = "\t")
 ```
 
 ### Find the distribution of the denfence system in plasmids genome.

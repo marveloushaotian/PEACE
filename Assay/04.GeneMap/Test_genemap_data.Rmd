@@ -11,17 +11,3 @@ library(ggplot2)
 library(gggenes)
 ```
 
-#### Test the genemap data.
-```{r}
-ggplot2::ggplot(example_genes, ggplot2::aes(xmin = start, xmax = end, y = molecule, fill = gene)) +
-  geom_gene_arrow() +
-  ggplot2::facet_wrap(~ molecule, scales = "free", ncol = 1) +
-  ggplot2::scale_fill_brewer(palette = "Set3")
-
-
-ggplot2::ggplot(example_genes, ggplot2::aes(xmin = start, xmax = end, y = molecule, fill = gene)) +
-  geom_gene_arrow() +
-  ggplot2::facet_wrap(~ molecule, scales = "free", ncol = 1) +
-  ggplot2::scale_fill_brewer(palette = "Set3") +
-  theme_genes()
-```

@@ -107,7 +107,7 @@ merge_data <- merge_data[,-1]
 merge_data$specific_tag <- paste(merge_data$system.number,merge_data$filenumber_tag,sep = "_")
 length(unique(merge_data$seqid))
 if(do.write){
-  write.csv(merge_data,"../Results/1.Original_Data/1.padloc_data/padloc_origin_output_fromR.csv",sep = "\t",row.names = F)
+  write.csv(merge_data,"../Results/1.Original_Data/1.padloc_data/padloc_origin_output_mar.csv",sep = "\t",row.names = F)
 }
 ```
 **The padloc output have `r length(unique(merge_data$specific_tag))` different defense systems in `r length(unique(merge_data$seqid))` plasmids.**
@@ -118,11 +118,11 @@ if(do.write){
 *should add some update scripts on it.*
 ```{r,warning = FALSE,message=FALSE}
 # Import Data.
-definder_origin <- read.table("../Results/1.Original_Data/2.defense_finder_data/defensefinder_origin_output.tsv", header = T, check.names = F)
-protein_name1 <- read.table("../Results/1.Original_Data/2.defense_finder_data/find_the_position/split_protein_name1.txt",header = T, check.names = F)
-protein_name2 <- read.table("../Results/1.Original_Data/2.defense_finder_data/find_the_position/split_protein_name2.txt",header = T, check.names = F)
-protein_name3 <- read.table("../Results/1.Original_Data/2.defense_finder_data/find_the_position/split_protein_name3.txt",header = T, check.names = F)
-protein_name4 <- read.table("../Results/1.Original_Data/2.defense_finder_data/find_the_position/split_protein_name4.txt",header = T, check.names = F)
+definder_origin <- read.table("../../Results/00.Original_Data/02.defense_finder_data/defensefinder_origin_output.tsv", header = T, check.names = F)
+protein_name1 <- read.table("../../Results/00.Original_Data/02.defense_finder_data/find_the_position/split_protein_name1.txt",header = T, check.names = F)
+protein_name2 <- read.table("../../Results/00.Original_Data/02.defense_finder_data/find_the_position/split_protein_name2.txt",header = T, check.names = F)
+protein_name3 <- read.table("../../Results/00.Original_Data/02.defense_finder_data/find_the_position/split_protein_name3.txt",header = T, check.names = F)
+protein_name4 <- read.table("../../Results/00.Original_Data/02.defense_finder_data/find_the_position/split_protein_name4.txt",header = T, check.names = F)
 
 # Add site imformation into the defensefinder output.
 combined_protein_name <- rbind(protein_name1,protein_name2,protein_name3,protein_name4)
@@ -143,7 +143,7 @@ site_merge_combine3$site <- paste("(",site_merge_combine3$beg,",",site_merge_com
 site_merge_combine3$length <- site_merge_combine3$end-site_merge_combine3$beg
 
 if(do.write){
-  write.table(site_merge_combine3,"../Results/2.Combined_Data/Process_file/2.defense_finder_data/defensefinder_addedsite.txt",sep = "\t",row.names = F)
+  write.table(site_merge_combine3,"../../Results/00.Original_Data/2.defense_finder_data/defensefinder_addedsite.txt",sep = "\t",row.names = F)
 }
 ```
 **The DefenseFinder output have `r length(site_merge_combine3$sys_id)` defense systems in xx plasmids.**
