@@ -1,0 +1,1343 @@
+---
+title: "Padloc and Defensefinder data combine and filter."
+author: "Haotian Zheng"
+date: "17/03/2022"
+output: html_document
+---
+
+```{r setup,include=FALSE,warning = FALSE,message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(ggrepel)
+library(gggenes)
+library(ggthemes)
+library(ggpubr)
+library(igraph)
+library(RColorBrewer)
+library(dplyr)
+library(plyr)
+library(reshape2)
+library(pheatmap)
+library(readxl)
+library(tibble)
+library(scales)
+library(psych)
+library(vegan)
+library(tidyverse)
+library(knitr)
+do.write <- F
+options(scipen = 200)
+```
+
+#### Original Data Prepare
+```{r}
+# import data.
+combined_origin_data <- read.table("../Results/2.Combined_Data/Process_file/combine_padloc_defensefinder_original.txt", header = T, sep = "\t")
+metadata <- read.delim("../Results/1.Original_Data/plsdb_metadata.txt", header = T)
+combined_origin_data2 <- left_join(combined_origin_data, metadata)
+combined_origin_data3 <- combined_origin_data2[order(combined_origin_data2$Count_Number),]
+# delete the cctyper output.
+combined_origin <- combined_origin_data3 %>% filter(combined_origin_data3$Defense_System_Type != "CAS") # Start File.
+```
+
+### Included data
+#### Included data - Same Type Same Source.
+```{r}
+combined <- combined_origin
+combined2 <- combined %>% dplyr::group_by(combined$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame()
+combined2$Count_Number <- c(1:length(combined2$Plasmid_ID))
+combined2$Included <- "None"
+combined2$Included_longer_number <- "None"
+combined2$Included_longer <- "None"
+combined2$Included_same_type_same_source <- "None"
+combined2$Included_same_type_diff_source <- "None"
+combined2$Included_diff_type_same_source <- "None"
+combined2$Included_diff_type_diff_source <- "None"
+combined2$Plasmid_ID <- as.factor(combined2$Plasmid_ID)
+combined3 <- combined2[,c(-22)] # delete the combined2$Plasmid_ID colume.
+
+# Select and delete the Included data first.
+for (i in 1:(length(levels(droplevels(combined2$Plasmid_ID))))) {
+  System_var1 <- levels(droplevels(combined2$Plasmid_ID))[i] # select the plasmid name
+  selected_dataframe <- combined2 %>% filter(combined2$Plasmid_ID == System_var1) # select same plasmid
+  dataframelength <- length(selected_dataframe$Count_Number) # how many defense system in one plasmid
+  plasmid_length <- selected_dataframe$Length[1]
+  # System1 in dataframe
+  for (j in 1:(dataframelength-1)) {
+    System_beg1 <- selected_dataframe$System_Beg[j] # first plasmid begin
+    System_end1 <- selected_dataframe$System_End[j] # first plasmid end
+    System_type1 <- selected_dataframe$Defense_System_Type[j] # first plasmid type name
+    System_length1 <- selected_dataframe$Defense_System_Length[j] # first plasmid length
+    System_source1 <- selected_dataframe$Source[j] # first plasmid source
+    System_recordnumber1 <- selected_dataframe$Count_Number[j] # first record number in the sheet
+    # System2 in dataframe
+    for (k in (j+1):dataframelength) {
+      System_beg2 <- selected_dataframe$System_Beg[k] # second plasmid begin
+      System_end2 <- selected_dataframe$System_End[k] # second plasmid end
+      System_type2 <- selected_dataframe$Defense_System_Type[k] # second plasmid type name
+      System_length2 <- selected_dataframe$Defense_System_Length[k] # second plasmid length
+      System_source2 <- selected_dataframe$Source[k] # second plasmid source
+      System_recordnumber2 <- selected_dataframe$Count_Number[k] # second record number in the sheet
+      
+      if (System_length1 < System_length2) {
+        longer_defensesystem <- System_recordnumber2
+      } else if (System_length1 > System_length2) {
+        longer_defensesystem <- System_recordnumber1
+      } else if (System_length1 == System_length2) {
+        longer_defensesystem = c(System_recordnumber1) # If the length is the same, I will just keep one of them.
+      }
+      # Included
+      if ((System_beg1 <= System_beg2 && System_end1 >= System_end2) | (System_beg1 >= System_beg2 && System_end1 <= System_end2)) {
+        combined3$Included[c(System_recordnumber1,System_recordnumber2)] <- min(abs((System_end1 - System_beg1) - (System_end2 - System_beg2)),abs((System_end2 - System_beg2) - (System_end1 - System_beg1)))
+        combined3$Included_longer_number[longer_defensesystem] <- max(System_length1,System_length2)
+        combined3$Included_longer[longer_defensesystem] <- "Longer"
+        if (System_type1 == System_type2) {
+          if (System_source1 == System_source2) {
+            combined3$Included_same_type_same_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          } else if (System_source1 != System_source2) {
+            combined3$Included_same_type_diff_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          }
+        } else if (System_type1 != System_type2) {
+          if (System_source1 == System_source2) {
+            combined3$Included_diff_type_same_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          } else if (System_source1 != System_source2) {
+            combined3$Included_diff_type_diff_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          }
+        }
+      }
+    }
+  }
+}
+
+# Output Files (1: means this classification data; 2: means after filter data. each group file is totally individual. But actually it should be consistant.)
+Included_same_type_same_source <- combined3[,c(1:9,11:21)] %>% filter(combined3$Included_same_type_same_source != "None") # keep the longer one preview
+write.table(Included_same_type_same_source, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Included_same_type_same_source_preview.txt", row.names = F, sep = "\t")
+Included_same_type_same_source2 <- combined3[,c(1:9,11:21)] %>% filter(combined3$Included_same_type_same_source != "None" & combined3$Included_longer == "Longer") # keep the longer one done
+write.table(Included_same_type_same_source2, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Included_same_type_same_source_select.txt", row.names = F, sep = "\t")
+Included_same_type_same_source3 <- combined3[,c(1:9,11:21)] %>% filter(combined3$Included_same_type_same_source != "None" & combined3$Included_longer != "Longer") # keep the longer one done
+write.table(Included_same_type_same_source3, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Included_same_type_same_source_delete.txt", row.names = F, sep = "\t")
+```
+
+#### Included data - Same Type Different Source.
+```{r}
+# combined4 <- setdiff(combined2[,c(1:9,11:21)],Included_same_type_same_source3) %>% unique()
+combined4 <- setdiff(combined[,c(-10)],Included_same_type_same_source3) %>% unique()
+combined5 <- combined4 %>% dplyr::group_by(combined4$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame()
+combined5$Count_Number <- c(1:length(combined5$Plasmid_ID))
+combined5$Included <- "None"
+combined5$Included_longer_number <- "None"
+combined5$Included_longer <- "None"
+combined5$Included_same_type_same_source <- "None"
+combined5$Included_same_type_diff_source <- "None"
+combined5$Included_diff_type_same_source <- "None"
+combined5$Included_diff_type_diff_source <- "None"
+combined5$Plasmid_ID <- droplevels(as.factor(combined5$Plasmid_ID))
+combined6 <- combined5[,c(-21)]
+
+# Select and delete the Included data first.
+for (i in 1:(length(levels(droplevels(combined5$Plasmid_ID))))) {
+  System_var1 <- levels(droplevels(combined5$Plasmid_ID))[i] # select the plasmid name
+  selected_dataframe <- combined5 %>% filter(combined5$Plasmid_ID == System_var1) # select same plasmid
+  dataframelength <- length(selected_dataframe$Count_Number) # how many defense system in one plasmid
+  plasmid_length <- selected_dataframe$Length[1]
+  # System1 in dataframe
+  for (j in 1:(dataframelength-1)) {
+    System_beg1 <- selected_dataframe$System_Beg[j] # first plasmid begin
+    System_end1 <- selected_dataframe$System_End[j] # first plasmid end
+    System_type1 <- selected_dataframe$Defense_System_Type[j] # first plasmid type name
+    System_length1 <- selected_dataframe$Defense_System_Length[j] # first plasmid length
+    System_source1 <- selected_dataframe$Source[j] # first plasmid source
+    System_recordnumber1 <- selected_dataframe$Count_Number[j] # first record number in the sheet
+    # System2 in dataframe
+    for (k in (j+1):dataframelength) {
+      System_beg2 <- selected_dataframe$System_Beg[k] # second plasmid begin
+      System_end2 <- selected_dataframe$System_End[k] # second plasmid end
+      System_type2 <- selected_dataframe$Defense_System_Type[k] # second plasmid type name
+      System_length2 <- selected_dataframe$Defense_System_Length[k] # second plasmid length
+      System_source2 <- selected_dataframe$Source[k] # second plasmid source
+      System_recordnumber2 <- selected_dataframe$Count_Number[k] # second record number in the sheet
+      
+      if (System_length1 < System_length2) {
+        longer_defensesystem <- System_recordnumber2
+      } else if (System_length1 > System_length2) {
+        longer_defensesystem <- System_recordnumber1
+      } else if (System_length1 == System_length2) {
+        longer_defensesystem = c(System_recordnumber1) # If the length is the same, I will just keep one of them.
+      }
+      # Included
+      if ((System_beg1 <= System_beg2 && System_end1 >= System_end2) | (System_beg1 >= System_beg2 && System_end1 <= System_end2)) {
+        combined6$Included[c(System_recordnumber1,System_recordnumber2)] <- min(abs((System_end1 - System_beg1) - (System_end2 - System_beg2)),abs((System_end2 - System_beg2) - (System_end1 - System_beg1)))
+        combined6$Included_longer_number[longer_defensesystem] <- max(System_length1,System_length2)
+        combined6$Included_longer[longer_defensesystem] <- "Longer"
+        if (System_type1 == System_type2) {
+          if (System_source1 == System_source2) {
+            combined6$Included_same_type_same_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          } else if (System_source1 != System_source2) {
+            combined6$Included_same_type_diff_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          }
+        } else if (System_type1 != System_type2) {
+          if (System_source1 == System_source2) {
+            combined6$Included_diff_type_same_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          } else if (System_source1 != System_source2) {
+            combined6$Included_diff_type_diff_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          }
+        }
+      }
+    }
+  }
+}
+
+Included_same_type_diff_source <- combined6[,c(1:20)] %>% filter(combined6$Included_same_type_diff_source != "None") # keep the longer one preview
+write.table(Included_same_type_diff_source, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Included_same_type_diff_source_preview.txt", row.names = F, sep = "\t")
+Included_same_type_diff_source2 <- combined6[,c(1:20)] %>% filter(combined6$Included_same_type_diff_source != "None" & combined6$Included_longer == "Longer") # keep the longer one done
+write.table(Included_same_type_diff_source2, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Included_same_type_diff_source_select.txt", row.names = F, sep = "\t")
+Included_same_type_diff_source3 <- combined6[,c(1:20)] %>% filter(combined6$Included_same_type_diff_source != "None" & combined6$Included_longer != "Longer")
+write.table(Included_same_type_diff_source3, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Included_same_type_diff_source_delete.txt", row.names = F, sep = "\t")
+
+
+Included_same_type_diff_source <- Included_same_type_diff_source %>% dplyr::group_by(Included_same_type_diff_source$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame() # Select the plasmids have mutiple systems. only there are 225 records.
+Included_same_type_diff_source$Plasmid_ID <- droplevels(as.factor(Included_same_type_diff_source$Plasmid_ID))
+Included_same_type_diff_source <- Included_same_type_diff_source[order(Included_same_type_diff_source$Plasmid_ID),]
+Included_same_type_diff_source$System_Beg <- as.numeric(Included_same_type_diff_source$System_Beg)
+Included_same_type_diff_source$System_End <- as.numeric(Included_same_type_diff_source$System_End)
+
+for (i in 1:77) {
+  No_overlap_same_type_diff_source3_p <- Included_same_type_diff_source[c(((i*10)+1):((i+1)*10)),]
+  ggplot(No_overlap_same_type_diff_source3_p, aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Type)) +
+    geom_gene_arrow() +
+    facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) +
+    # scale_fill_brewer(palette = "Set3") +
+    theme_genes()
+  ggsave(width=6,height=8,filename=paste0("../Results/3.Preliminary_Analysis/GeneMap_Test/Included_sametype_samesource/plot_",i,".pdf"),limitsize = FALSE)
+}
+```
+
+#### Included data - Different Type Same Source.
+```{r}
+# combined7 <- setdiff(combined5[,c(1:20)],Included_same_type_diff_source3) %>% unique()
+combined7 <- setdiff(combined4,Included_same_type_diff_source3) %>% unique()
+combined8 <- combined7 %>% dplyr::group_by(combined7$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame()
+combined8$Count_Number <- c(1:length(combined8$Plasmid_ID))
+combined8$Included <- "None"
+combined8$Included_longer_number <- "None"
+combined8$Included_longer <- "None"
+combined8$Included_same_type_same_source <- "None"
+combined8$Included_same_type_diff_source <- "None"
+combined8$Included_diff_type_same_source <- "None"
+combined8$Included_diff_type_diff_source <- "None"
+combined8$Plasmid_ID <- as.factor(combined8$Plasmid_ID)
+combined9 <- combined8[,c(-21)]
+
+# Select and delete the Included data first.
+for (i in 1:(length(levels(droplevels(combined8$Plasmid_ID))))) {
+  System_var1 <- levels(droplevels(combined8$Plasmid_ID))[i] # select the plasmid name
+  selected_dataframe <- combined8 %>% filter(combined8$Plasmid_ID == System_var1) # select same plasmid
+  dataframelength <- length(selected_dataframe$Count_Number) # how many defense system in one plasmid
+  plasmid_length <- selected_dataframe$Length[1]
+  # System1 in dataframe
+  for (j in 1:(dataframelength-1)) {
+    System_beg1 <- selected_dataframe$System_Beg[j] # first plasmid begin
+    System_end1 <- selected_dataframe$System_End[j] # first plasmid end
+    System_type1 <- selected_dataframe$Defense_System_Type[j] # first plasmid type name
+    System_length1 <- selected_dataframe$Defense_System_Length[j] # first plasmid length
+    System_source1 <- selected_dataframe$Source[j] # first plasmid source
+    System_recordnumber1 <- selected_dataframe$Count_Number[j] # first record number in the sheet
+    # System2 in dataframe
+    for (k in (j+1):dataframelength) {
+      System_beg2 <- selected_dataframe$System_Beg[k] # second plasmid begin
+      System_end2 <- selected_dataframe$System_End[k] # second plasmid end
+      System_type2 <- selected_dataframe$Defense_System_Type[k] # second plasmid type name
+      System_length2 <- selected_dataframe$Defense_System_Length[k] # second plasmid length
+      System_source2 <- selected_dataframe$Source[k] # second plasmid source
+      System_recordnumber2 <- selected_dataframe$Count_Number[k] # second record number in the sheet
+      
+      if (System_length1 < System_length2) {
+        longer_defensesystem <- System_recordnumber2
+      } else if (System_length1 > System_length2) {
+        longer_defensesystem <- System_recordnumber1
+      } else if (System_length1 == System_length2) {
+        longer_defensesystem = c(System_recordnumber1) # If the length is the same, I will just keep one of them.
+      }
+      # Included
+      if ((System_beg1 <= System_beg2 && System_end1 >= System_end2) | (System_beg1 >= System_beg2 && System_end1 <= System_end2)) {
+        combined9$Included[c(System_recordnumber1,System_recordnumber2)] <- min(abs((System_end1 - System_beg1) - (System_end2 - System_beg2)),abs((System_end2 - System_beg2) - (System_end1 - System_beg1)))
+        combined9$Included_longer_number[longer_defensesystem] <- max(System_length1,System_length2)
+        combined9$Included_longer[longer_defensesystem] <- "Longer"
+        if (System_type1 == System_type2) {
+          if (System_source1 == System_source2) {
+            combined9$Included_same_type_same_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          } else if (System_source1 != System_source2) {
+            combined9$Included_same_type_diff_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          }
+        } else if (System_type1 != System_type2) {
+          if (System_source1 == System_source2) {
+            combined9$Included_diff_type_same_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          } else if (System_source1 != System_source2) {
+            combined9$Included_diff_type_diff_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          }
+        }
+      }
+    }
+  }
+}
+
+Included_diff_type_same_source <- combined9[,c(1:20)] %>% filter(combined9$Included_diff_type_same_source != "None") # keep the longer one preview
+write.table(Included_diff_type_same_source, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Included_diff_type_same_source_preview.txt", row.names = F, sep = "\t")
+Included_diff_type_same_source2 <- combined9[,c(1:20)] %>% filter(combined9$Included_diff_type_same_source != "None" & combined9$Included_longer == "Longer") # keep the longer one done
+write.table(Included_diff_type_same_source2, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Included_diff_type_same_source_select.txt", row.names = F, sep = "\t")
+Included_diff_type_same_source3 <- combined9[,c(1:20)] %>% filter(combined9$Included_diff_type_same_source != "None" & combined9$Included_longer != "Longer")
+write.table(Included_diff_type_same_source3, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Included_diff_type_same_source_delete.txt", row.names = F, sep = "\t")
+
+
+Included_diff_type_same_source <- Included_diff_type_same_source %>% dplyr::group_by(Included_diff_type_same_source$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame() # Select the plasmids have mutiple systems. only there are 225 records.
+Included_diff_type_same_source$Plasmid_ID <- droplevels(as.factor(Included_diff_type_same_source$Plasmid_ID))
+Included_diff_type_same_source <- Included_diff_type_same_source[order(Included_diff_type_same_source$Plasmid_ID),]
+Included_diff_type_same_source$System_Beg <- as.numeric(Included_diff_type_same_source$System_Beg)
+Included_diff_type_same_source$System_End <- as.numeric(Included_diff_type_same_source$System_End)
+
+for (i in 1:18) {
+  No_overlap_same_type_diff_source3_p <- Included_diff_type_same_source[c(((i*10)+1):((i+1)*10)),]
+  ggplot(No_overlap_same_type_diff_source3_p, aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Type)) +
+    geom_gene_arrow() +
+    facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) +
+    # scale_fill_brewer(palette = "Set3") +
+    theme_genes()
+  ggsave(width=6,height=8,filename=paste0("../Results/3.Preliminary_Analysis/GeneMap_Test/Included_difftype_samesource/plot_",i,".pdf"),limitsize = FALSE)
+}
+
+
+Included_diff_type_same_source <- Included_diff_type_same_source %>% dplyr::group_by(Included_diff_type_same_source$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame() # Select the plasmids have mutiple systems. only there are 225 records.
+Included_diff_type_same_source$Plasmid_ID <- droplevels(as.factor(Included_diff_type_same_source$Plasmid_ID))
+Included_diff_type_same_source <- Included_diff_type_same_source[order(Included_diff_type_same_source$Plasmid_ID),]
+Included_diff_type_same_source$System_Beg <- as.numeric(Included_diff_type_same_source$System_Beg)
+Included_diff_type_same_source$System_End <- as.numeric(Included_diff_type_same_source$System_End)
+
+for (i in 1:35) {
+  No_overlap_same_type_diff_source3_p <- Included_diff_type_same_source[c(((i*10)+1):((i+1)*10)),]
+  ggplot(No_overlap_same_type_diff_source3_p, aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Type)) +
+    geom_gene_arrow() +
+    facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) +
+    # scale_fill_brewer(palette = "Set3") +
+    theme_genes()
+  ggsave(width=6,height=8,filename=paste0("../Results/3.Preliminary_Analysis/GeneMap_Test/Included_sametype_diffsource/plot_",i,".pdf"),limitsize = FALSE)
+}
+```
+
+#### Included data - Different Type Different Source.
+```{r}
+# combined10 <- setdiff(combined8[,c(1:20)],Included_diff_type_same_source3) %>% unique()
+combined10 <- setdiff(combined7,Included_diff_type_same_source3) %>% unique()
+combined11 <- combined10 %>% dplyr::group_by(combined10$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame()
+combined11$Count_Number <- c(1:length(combined11$Plasmid_ID))
+combined11$Included <- "None"
+combined11$Included_longer_number <- "None"
+combined11$Included_longer <- "None"
+combined11$Included_same_type_same_source <- "None"
+combined11$Included_same_type_diff_source <- "None"
+combined11$Included_diff_type_same_source <- "None"
+combined11$Included_diff_type_diff_source <- "None"
+combined11$Plasmid_ID <- as.factor(combined11$Plasmid_ID)
+combined12 <- combined11[,c(-21)]
+
+# Select and delete the Included data first.
+for (i in 1:(length(levels(droplevels(combined11$Plasmid_ID))))) {
+  System_var1 <- levels(droplevels(combined11$Plasmid_ID))[i] # select the plasmid name
+  selected_dataframe <- combined11 %>% filter(combined11$Plasmid_ID == System_var1) # select same plasmid
+  dataframelength <- length(selected_dataframe$Count_Number) # how many defense system in one plasmid
+  plasmid_length <- selected_dataframe$Length[1]
+  # System1 in dataframe
+  for (j in 1:(dataframelength-1)) {
+    System_beg1 <- selected_dataframe$System_Beg[j] # first plasmid begin
+    System_end1 <- selected_dataframe$System_End[j] # first plasmid end
+    System_type1 <- selected_dataframe$Defense_System_Type[j] # first plasmid type name
+    System_length1 <- selected_dataframe$Defense_System_Length[j] # first plasmid length
+    System_source1 <- selected_dataframe$Source[j] # first plasmid source
+    System_recordnumber1 <- selected_dataframe$Count_Number[j] # first record number in the sheet
+    # System2 in dataframe
+    for (k in (j+1):dataframelength) {
+      System_beg2 <- selected_dataframe$System_Beg[k] # second plasmid begin
+      System_end2 <- selected_dataframe$System_End[k] # second plasmid end
+      System_type2 <- selected_dataframe$Defense_System_Type[k] # second plasmid type name
+      System_length2 <- selected_dataframe$Defense_System_Length[k] # second plasmid length
+      System_source2 <- selected_dataframe$Source[k] # second plasmid source
+      System_recordnumber2 <- selected_dataframe$Count_Number[k] # second record number in the sheet
+      
+      if (System_length1 < System_length2) {
+        longer_defensesystem <- System_recordnumber2
+      } else if (System_length1 > System_length2) {
+        longer_defensesystem <- System_recordnumber1
+      } else if (System_length1 == System_length2) {
+        longer_defensesystem = c(System_recordnumber1) # If the length is the same, I will just keep one of them.
+      }
+      # Included
+      if ((System_beg1 <= System_beg2 && System_end1 >= System_end2) | (System_beg1 >= System_beg2 && System_end1 <= System_end2)) {
+        combined12$Included[c(System_recordnumber1,System_recordnumber2)] <- min(abs((System_end1 - System_beg1) - (System_end2 - System_beg2)),abs((System_end2 - System_beg2) - (System_end1 - System_beg1)))
+        combined12$Included_longer_number[longer_defensesystem] <- max(System_length1,System_length2)
+        combined12$Included_longer[longer_defensesystem] <- "Longer"
+        if (System_type1 == System_type2) {
+          if (System_source1 == System_source2) {
+            combined12$Included_same_type_same_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          } else if (System_source1 != System_source2) {
+            combined12$Included_same_type_diff_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          }
+        } else if (System_type1 != System_type2) {
+          if (System_source1 == System_source2) {
+            combined12$Included_diff_type_same_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          } else if (System_source1 != System_source2) {
+            combined12$Included_diff_type_diff_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          }
+        }
+      }
+    }
+  }
+}
+
+Included_diff_type_diff_source <- combined12[,c(1:20)] %>% filter(combined12$Included_diff_type_diff_source != "None") # keep the longer one preview
+write.table(Included_diff_type_diff_source, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Included_diff_type_diff_source_preview.txt", row.names = F, sep = "\t")
+Included_diff_type_diff_source2 <- combined12[,c(1:20)] %>% filter(combined12$Included_diff_type_diff_source != "None" & combined12$Included_longer == "Longer") # keep the longer one done
+write.table(Included_diff_type_diff_source2, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Included_diff_type_diff_source_select.txt", row.names = F, sep = "\t")
+Included_diff_type_diff_source3 <- combined12[,c(1:20)] %>% filter(combined12$Included_diff_type_diff_source != "None" & combined12$Included_longer != "Longer")
+write.table(Included_diff_type_diff_source3, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Included_diff_type_diff_source_delete.txt", row.names = F, sep = "\t")
+
+
+Included_diff_type_diff_source <- Included_diff_type_diff_source %>% dplyr::group_by(Included_diff_type_diff_source$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame() # Select the plasmids have mutiple systems. only there are 225 records.
+Included_diff_type_diff_source$Plasmid_ID <- droplevels(as.factor(Included_diff_type_diff_source$Plasmid_ID))
+Included_diff_type_diff_source <- Included_diff_type_diff_source[order(Included_diff_type_diff_source$Plasmid_ID),]
+Included_diff_type_diff_source$System_Beg <- as.numeric(Included_diff_type_diff_source$System_Beg)
+Included_diff_type_diff_source$System_End <- as.numeric(Included_diff_type_diff_source$System_End)
+
+for (i in 1:32) {
+  No_overlap_same_type_diff_source3_p <- Included_diff_type_diff_source[c(((i*10)+1):((i+1)*10)),]
+  ggplot(No_overlap_same_type_diff_source3_p, aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Type)) +
+    geom_gene_arrow() +
+    facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) +
+    # scale_fill_brewer(palette = "Set3") +
+    theme_genes()
+  ggsave(width=6,height=8,filename=paste0("../Results/3.Preliminary_Analysis/GeneMap_Test/Included_difftype_diffsource/plot_",i,".pdf"),limitsize = FALSE)
+}
+```
+
+#### Combine all data and filter.
+*Need to know that: although we are deal with the included data. after that, there should no more included data.*
+```{r}
+Included_final_data <- rbind(Included_same_type_same_source2,Included_same_type_diff_source2,Included_diff_type_same_source2,Included_diff_type_diff_source2) %>% unique()
+Included_final_data_remove <- rbind(Included_same_type_same_source3,Included_same_type_diff_source3,Included_diff_type_same_source3,Included_diff_type_diff_source3) %>% unique()
+```
+
+#### Draw the genemap plots.
+*Need to know that: although we are deal with the included data. after that, there should no more included data.*
+```{r}
+Included_final_data2 <- Included_final_data %>% dplyr::group_by(Included_final_data$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame() # Select the plasmids have mutiple systems. only there are 225 records.
+Included_final_data2$Plasmid_ID <- droplevels(Included_final_data2$Plasmid_ID)
+Included_final_data2 <- Included_final_data2[order(Included_final_data2$Plasmid_ID),]
+Included_final_data2$System_Beg <- as.numeric(Included_final_data2$System_Beg)
+Included_final_data2$System_End <- as.numeric(Included_final_data2$System_End)
+Included_final_data3 <- Included_final_data2[c(1:11),]
+ggplot(Included_final_data3, aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Type)) +
+  geom_gene_arrow() + 
+  facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) + 
+  scale_fill_brewer(palette = "Set3") +
+  theme_genes()
+ggsave(width=6,height=10,filename="../Results/3.Preliminary_Analysis/GeneMap_Test/test1.pdf",limitsize = FALSE)
+```
+
+### Part of overlap data
+#### Part of overlap data - Same Type Same Source.
+```{r}
+# combined13 <- setdiff(combined11[,c(1:20)],Included_diff_type_diff_source3) %>% unique()
+combined13 <- setdiff(combined10,Included_diff_type_diff_source3) %>% unique()
+combined14 <- combined13 %>% dplyr::group_by(combined13$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame()
+combined14$Count_Number <- c(1:length(combined14$Plasmid_ID))
+combined14$Part_overlap_dis <- "None"
+combined14$Part_overlap_dis_longer_number <- "None"
+combined14$Part_overlap_dis_longer <- "None"
+combined14$Part_overlap_combine_beg <- "None"
+combined14$Part_overlap_combine_end <- "None"
+combined14$Part_overlap_unite <- "None"
+combined14$Part_overlap_same_type_same_source <- "None"
+combined14$Part_overlap_same_type_diff_source <- "None"
+combined14$Part_overlap_diff_type_diff_source <- "None"
+combined14$Plasmid_ID <- as.factor(combined14$Plasmid_ID)
+combined15 <- combined14[,c(-21)]
+
+# Remove the Included data in part overlap data second.
+for (i in 1:(length(levels(droplevels(combined14$Plasmid_ID))))) {
+  System_var1 <- levels(droplevels(combined14$Plasmid_ID))[i] # select the plasmid name
+  selected_dataframe <- combined14 %>% filter(combined14$Plasmid_ID == System_var1) # select same plasmid
+  dataframelength <- length(selected_dataframe$Count_Number) # how many defense system in one plasmid
+  plasmid_length <- selected_dataframe$Length[1]
+  # System1 in dataframe
+  for (j in 1:(dataframelength-1)) {
+    System_beg1 <- selected_dataframe$System_Beg[j] # first plasmid begin
+    System_end1 <- selected_dataframe$System_End[j] # first plasmid end
+    System_type1 <- selected_dataframe$Defense_System_Type[j] # first plasmid type name
+    System_length1 <- selected_dataframe$Defense_System_Length[j] # first plasmid length
+    System_source1 <- selected_dataframe$Source[j] # first plasmid source
+    System_recordnumber1 <- selected_dataframe$Count_Number[j] # first record number in the sheet
+    # System2 in dataframe
+    for (k in (j+1):dataframelength) {
+      System_beg2 <- selected_dataframe$System_Beg[k] # second plasmid begin
+      System_end2 <- selected_dataframe$System_End[k] # second plasmid end
+      System_type2 <- selected_dataframe$Defense_System_Type[k] # second plasmid type name
+      System_length2 <- selected_dataframe$Defense_System_Length[k] # second plasmid length
+      System_source2 <- selected_dataframe$Source[k] # second plasmid source
+      System_recordnumber2 <- selected_dataframe$Count_Number[k] # second record number in the sheet
+      
+      if (System_length1 < System_length2) {
+        longer_defensesystem <- System_recordnumber2
+      } else if (System_length1 > System_length2) {
+        longer_defensesystem <- System_recordnumber1
+      } else if (System_length1 == System_length2) {
+        longer_defensesystem = c(System_recordnumber1) # If the length is the same, I will just keep one of them.
+      }
+      
+      # Part overlap
+      if ((System_beg1 < System_beg2 && System_end1 < System_end2 && System_beg2 < System_end1) | (System_beg2 < System_beg1 && System_end2 < System_end1 && System_beg1 < System_end2)) {
+        combined15$Part_overlap_dis[c(System_recordnumber1,System_recordnumber2)] <- min(abs(System_end1 - System_beg2),abs(System_end2 - System_beg1))
+        combined15$Part_overlap_dis_longer_number[longer_defensesystem] <- max(System_length1,System_length2)
+        combined15$Part_overlap_dis_longer[longer_defensesystem] <- "Longer"
+        combined15$Part_overlap_combine_beg[c(System_recordnumber1,System_recordnumber2)] <- min(System_beg1,System_beg2)
+        combined15$Part_overlap_combine_end[c(System_recordnumber1,System_recordnumber2)] <- max(System_end1,System_end2)
+        combined15$Part_overlap_unite[c(System_recordnumber1,System_recordnumber2)] <- max(System_end1,System_end2) - min(System_beg1,System_beg2)
+        if (System_type1 == System_type2) {
+          if (System_source1 == System_source2) {
+            combined15$Part_overlap_same_type_same_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          } else if (System_source1 != System_source2) {
+            combined15$Part_overlap_same_type_diff_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          }
+        } else if (System_type1 != System_type2) {
+          combined15$Part_overlap_diff_type_diff_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+        }
+      }
+    }
+  }
+}
+
+# NEED TO COMBINE THE DATA HERE.
+
+# Output Files
+Part_overlap_same_type_same_source <- combined15[,c(1:20)] %>% filter(combined15$Part_overlap_same_type_same_source != "None") # keep the longer one/combine them preview
+write.table(Part_overlap_same_type_same_source, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Part_overlap_same_type_same_source_preview.txt", row.names = F, sep = "\t")
+Part_overlap_same_type_same_source2 <- combined15[,c(1:20)] %>% filter(combined15$Part_overlap_same_type_same_source != "None" & combined15$Part_overlap_dis_longer == "Longer") # keep the longer one done
+write.table(Part_overlap_same_type_same_source2, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Part_overlap_same_type_same_source_select.txt", row.names = F, sep = "\t")
+Part_overlap_same_type_same_source3 <- combined15[,c(1:20)] %>% filter(combined15$Part_overlap_same_type_same_source != "None" & combined15$Part_overlap_dis_longer != "Longer")
+write.table(Part_overlap_same_type_same_source3, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Part_overlap_same_type_same_source_delete.txt", row.names = F, sep = "\t")
+
+
+Part_overlap_same_type_same_source <- Part_overlap_same_type_same_source %>% dplyr::group_by(Part_overlap_same_type_same_source$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame() # Select the plasmids have mutiple systems. only there are 225 records.
+Part_overlap_same_type_same_source$Plasmid_ID <- droplevels(as.factor(Part_overlap_same_type_same_source$Plasmid_ID))
+Part_overlap_same_type_same_source <- Part_overlap_same_type_same_source[order(Part_overlap_same_type_same_source$Plasmid_ID),]
+Part_overlap_same_type_same_source$System_Beg <- as.numeric(Part_overlap_same_type_same_source$System_Beg)
+Part_overlap_same_type_same_source$System_End <- as.numeric(Part_overlap_same_type_same_source$System_End)
+
+for (i in 1:3) {
+  No_overlap_same_type_diff_source3_p <- Part_overlap_same_type_same_source[c(((i*10)+1):((i+1)*10)),]
+  ggplot(No_overlap_same_type_diff_source3_p, aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Type)) +
+    geom_gene_arrow() +
+    facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) +
+    # scale_fill_brewer(palette = "Set3") +
+    theme_genes()
+  ggsave(width=6,height=8,filename=paste0("../Results/3.Preliminary_Analysis/GeneMap_Test/Partoverlap_sametype_samesource/plot_",i,".pdf"),limitsize = FALSE)
+}
+```
+
+#### Part of overlap data - Same Type Different Source.
+```{r}
+# combined16 <- setdiff(combined14[,c(1:20)],Part_overlap_same_type_same_source3) %>% unique()
+combined16 <- setdiff(combined13,Part_overlap_same_type_same_source3) %>% unique()
+combined17 <- combined16 %>% dplyr::group_by(combined16$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame()
+combined17$Count_Number <- c(1:length(combined17$Plasmid_ID))
+combined17$Part_overlap_dis <- "None"
+combined17$Part_overlap_dis_longer_number <- "None"
+combined17$Part_overlap_dis_longer <- "None"
+combined17$Part_overlap_combine_beg <- "None"
+combined17$Part_overlap_combine_end <- "None"
+combined17$Part_overlap_unite <- "None"
+combined17$Part_overlap_same_type_same_source <- "None"
+combined17$Part_overlap_same_type_diff_source <- "None"
+combined17$Part_overlap_diff_type_diff_source <- "None"
+combined17$Plasmid_ID <- as.factor(combined17$Plasmid_ID)
+combined18 <- combined17[,c(-21)]
+
+# Remove the Included data in part overlap data second.
+for (i in 1:(length(levels(droplevels(combined17$Plasmid_ID))))) {
+  System_var1 <- levels(droplevels(combined17$Plasmid_ID))[i] # select the plasmid name
+  selected_dataframe <- combined17 %>% filter(combined17$Plasmid_ID == System_var1) # select same plasmid
+  dataframelength <- length(selected_dataframe$Count_Number) # how many defense system in one plasmid
+  plasmid_length <- selected_dataframe$Length[1]
+  # System1 in dataframe
+  for (j in 1:(dataframelength-1)) {
+    System_beg1 <- selected_dataframe$System_Beg[j] # first plasmid begin
+    System_end1 <- selected_dataframe$System_End[j] # first plasmid end
+    System_type1 <- selected_dataframe$Defense_System_Type[j] # first plasmid type name
+    System_length1 <- selected_dataframe$Defense_System_Length[j] # first plasmid length
+    System_source1 <- selected_dataframe$Source[j] # first plasmid source
+    System_recordnumber1 <- selected_dataframe$Count_Number[j] # first record number in the sheet
+    # System2 in dataframe
+    for (k in (j+1):dataframelength) {
+      System_beg2 <- selected_dataframe$System_Beg[k] # second plasmid begin
+      System_end2 <- selected_dataframe$System_End[k] # second plasmid end
+      System_type2 <- selected_dataframe$Defense_System_Type[k] # second plasmid type name
+      System_length2 <- selected_dataframe$Defense_System_Length[k] # second plasmid length
+      System_source2 <- selected_dataframe$Source[k] # second plasmid source
+      System_recordnumber2 <- selected_dataframe$Count_Number[k] # second record number in the sheet
+      
+      if (System_length1 < System_length2) {
+        longer_defensesystem <- System_recordnumber2
+      } else if (System_length1 > System_length2) {
+        longer_defensesystem <- System_recordnumber1
+      } else if (System_length1 == System_length2) {
+        longer_defensesystem = c(System_recordnumber1) # If the length is the same, I will just keep one of them.
+      }
+      
+      # Part overlap
+      if ((System_beg1 < System_beg2 && System_end1 < System_end2 && System_beg2 < System_end1) | (System_beg2 < System_beg1 && System_end2 < System_end1 && System_beg1 < System_end2)) {
+        combined18$Part_overlap_dis[c(System_recordnumber1,System_recordnumber2)] <- min(abs(System_end1 - System_beg2),abs(System_end2 - System_beg1))
+        combined18$Part_overlap_dis_longer_number[longer_defensesystem] <- max(System_length1,System_length2)
+        combined18$Part_overlap_dis_longer[longer_defensesystem] <- "Longer"
+        combined18$Part_overlap_combine_beg[c(System_recordnumber1,System_recordnumber2)] <- min(System_beg1,System_beg2)
+        combined18$Part_overlap_combine_end[c(System_recordnumber1,System_recordnumber2)] <- max(System_end1,System_end2)
+        combined18$Part_overlap_unite[c(System_recordnumber1,System_recordnumber2)] <- max(System_end1,System_end2) - min(System_beg1,System_beg2)
+        if (System_type1 == System_type2) {
+          if (System_source1 == System_source2) {
+            combined18$Part_overlap_same_type_same_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          } else if (System_source1 != System_source2) {
+            combined18$Part_overlap_same_type_diff_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          }
+        } else if (System_type1 != System_type2) {
+          combined18$Part_overlap_diff_type_diff_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+        }
+      }
+    }
+  }
+}
+
+# NEED TO COMBINE THE DATA HERE.
+
+# Output Files
+Part_overlap_same_type_diff_source <- combined18[,c(1:20)] %>% filter(combined18$Part_overlap_same_type_diff_source != "None") # keep the longer one/combine them preview
+write.table(Part_overlap_same_type_same_source, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Part_overlap_same_type_diff_source_preview.txt", row.names = F, sep = "\t")
+Part_overlap_same_type_diff_source2 <- combined18[,c(1:20)] %>% filter(combined18$Part_overlap_same_type_diff_source != "None" & combined18$Part_overlap_dis_longer == "Longer") # keep the longer one done
+write.table(Included_diff_type_diff_source, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Part_overlap_same_type_diff_source_select.txt", row.names = F, sep = "\t")
+Part_overlap_same_type_diff_source3 <- combined18[,c(1:20)] %>% filter(combined18$Part_overlap_same_type_diff_source != "None" & combined18$Part_overlap_dis_longer != "Longer")
+write.table(Included_diff_type_diff_source, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Part_overlap_same_type_diff_source_delete.txt", row.names = F, sep = "\t")
+
+
+Part_overlap_same_type_diff_source <- Part_overlap_same_type_diff_source %>% dplyr::group_by(Part_overlap_same_type_diff_source$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame() # Select the plasmids have mutiple systems. only there are 225 records.
+Part_overlap_same_type_diff_source$Plasmid_ID <- droplevels(as.factor(Part_overlap_same_type_diff_source$Plasmid_ID))
+Part_overlap_same_type_diff_source <- Part_overlap_same_type_diff_source[order(Part_overlap_same_type_diff_source$Plasmid_ID),]
+Part_overlap_same_type_diff_source$System_Beg <- as.numeric(Part_overlap_same_type_diff_source$System_Beg)
+Part_overlap_same_type_diff_source$System_End <- as.numeric(Part_overlap_same_type_diff_source$System_End)
+
+for (i in 1:13) {
+  No_overlap_same_type_diff_source3_p <- Part_overlap_same_type_diff_source[c(((i*10)+1):((i+1)*10)),]
+  ggplot(No_overlap_same_type_diff_source3_p, aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Type)) +
+    geom_gene_arrow() +
+    facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) +
+    # scale_fill_brewer(palette = "Set3") +
+    theme_genes()
+  ggsave(width=6,height=8,filename=paste0("../Results/3.Preliminary_Analysis/GeneMap_Test/Partoverlap_sametype_diffsource/plot_",i,".pdf"),limitsize = FALSE)
+}
+```
+
+#### Part of overlap data - Different Type.
+```{r}
+# combined19 <- setdiff(combined17[,c(1:20)],Part_overlap_same_type_diff_source3) %>% unique()
+combined19 <- setdiff(combined16,Part_overlap_same_type_diff_source3) %>% unique()
+combined20 <- combined19 %>% dplyr::group_by(combined19$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame()
+combined20$Count_Number <- c(1:length(combined20$Plasmid_ID))
+combined20$Part_overlap_dis <- "None"
+combined20$Part_overlap_dis_longer_number <- "None"
+combined20$Part_overlap_dis_longer <- "None"
+combined20$Part_overlap_combine_beg <- "None"
+combined20$Part_overlap_combine_end <- "None"
+combined20$Part_overlap_unite <- "None"
+combined20$Part_overlap_same_type_same_source <- "None"
+combined20$Part_overlap_same_type_diff_source <- "None"
+combined20$Part_overlap_diff_type_diff_source <- "None"
+combined20$Plasmid_ID <- as.factor(combined20$Plasmid_ID)
+combined21 <- combined20[,c(-21)]
+
+# Remove the Included data in part overlap data second.
+for (i in 1:(length(levels(droplevels(combined20$Plasmid_ID))))) {
+  System_var1 <- levels(droplevels(combined20$Plasmid_ID))[i] # select the plasmid name
+  selected_dataframe <- combined20 %>% filter(combined20$Plasmid_ID == System_var1) # select same plasmid
+  dataframelength <- length(selected_dataframe$Count_Number) # how many defense system in one plasmid
+  plasmid_length <- selected_dataframe$Length[1]
+  # System1 in dataframe
+  for (j in 1:(dataframelength-1)) {
+    System_beg1 <- selected_dataframe$System_Beg[j] # first plasmid begin
+    System_end1 <- selected_dataframe$System_End[j] # first plasmid end
+    System_type1 <- selected_dataframe$Defense_System_Type[j] # first plasmid type name
+    System_length1 <- selected_dataframe$Defense_System_Length[j] # first plasmid length
+    System_source1 <- selected_dataframe$Source[j] # first plasmid source
+    System_recordnumber1 <- selected_dataframe$Count_Number[j] # first record number in the sheet
+    # System2 in dataframe
+    for (k in (j+1):dataframelength) {
+      System_beg2 <- selected_dataframe$System_Beg[k] # second plasmid begin
+      System_end2 <- selected_dataframe$System_End[k] # second plasmid end
+      System_type2 <- selected_dataframe$Defense_System_Type[k] # second plasmid type name
+      System_length2 <- selected_dataframe$Defense_System_Length[k] # second plasmid length
+      System_source2 <- selected_dataframe$Source[k] # second plasmid source
+      System_recordnumber2 <- selected_dataframe$Count_Number[k] # second record number in the sheet
+      
+      if (System_length1 < System_length2) {
+        longer_defensesystem <- System_recordnumber2
+      } else if (System_length1 > System_length2) {
+        longer_defensesystem <- System_recordnumber1
+      } else if (System_length1 == System_length2) {
+        longer_defensesystem = c(System_recordnumber1) # If the length is the same, I will just keep one of them.
+      }
+      
+      # Part overlap
+      if ((System_beg1 < System_beg2 && System_end1 < System_end2 && System_beg2 < System_end1) | (System_beg2 < System_beg1 && System_end2 < System_end1 && System_beg1 < System_end2)) {
+        combined21$Part_overlap_dis[c(System_recordnumber1,System_recordnumber2)] <- min(abs(System_end1 - System_beg2),abs(System_end2 - System_beg1))
+        combined21$Part_overlap_dis_longer_number[longer_defensesystem] <- max(System_length1,System_length2)
+        combined21$Part_overlap_dis_longer[longer_defensesystem] <- "Longer"
+        combined21$Part_overlap_combine_beg[c(System_recordnumber1,System_recordnumber2)] <- min(System_beg1,System_beg2)
+        combined21$Part_overlap_combine_end[c(System_recordnumber1,System_recordnumber2)] <- max(System_end1,System_end2)
+        combined21$Part_overlap_unite[c(System_recordnumber1,System_recordnumber2)] <- max(System_end1,System_end2) - min(System_beg1,System_beg2)
+        if (System_type1 == System_type2) {
+          if (System_source1 == System_source2) {
+            combined21$Part_overlap_same_type_same_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          } else if (System_source1 != System_source2) {
+            combined21$Part_overlap_same_type_diff_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+          }
+        } else if (System_type1 != System_type2) {
+          combined21$Part_overlap_diff_type_diff_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes"
+        }
+      }
+    }
+  }
+}
+
+# NEED TO COMBINE THE DATA HERE.
+
+# Output Files
+Part_overlap_diff_type_diff_source <- combined21[,c(1:20)] %>% filter(combined21$Part_overlap_diff_type_diff_source != "None") # keep the longer one/combine them preview
+write.table(Part_overlap_diff_type_diff_source, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Part_overlap_diff_type_diff_source_preview.txt", row.names = F, sep = "\t")
+Part_overlap_diff_type_diff_source2 <- combined21[,c(1:20)] %>% filter(combined21$Part_overlap_diff_type_diff_source != "None" & combined21$Part_overlap_dis_longer == "Longer") # keep the longer one done
+write.table(Part_overlap_diff_type_diff_source2, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Part_overlap_diff_type_diff_source_select.txt", row.names = F, sep = "\t")
+Part_overlap_diff_type_diff_source3 <- combined21[,c(1:20)] %>% filter(combined21$Part_overlap_diff_type_diff_source != "None" & combined21$Part_overlap_dis_longer != "Longer")
+write.table(Part_overlap_diff_type_diff_source3, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Part_overlap_diff_type_diff_source_delete.txt", row.names = F, sep = "\t")
+
+
+
+Part_overlap_diff_type_diff_source <- Part_overlap_diff_type_diff_source %>% dplyr::group_by(Part_overlap_diff_type_diff_source$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame() # Select the plasmids have mutiple systems. only there are 225 records.
+Part_overlap_diff_type_diff_source$Plasmid_ID <- droplevels(as.factor(Part_overlap_diff_type_diff_source$Plasmid_ID))
+Part_overlap_diff_type_diff_source <- Part_overlap_diff_type_diff_source[order(Part_overlap_diff_type_diff_source$Plasmid_ID),]
+Part_overlap_diff_type_diff_source$System_Beg <- as.numeric(Part_overlap_diff_type_diff_source$System_Beg)
+Part_overlap_diff_type_diff_source$System_End <- as.numeric(Part_overlap_diff_type_diff_source$System_End)
+
+for (i in 1:7) {
+  No_overlap_same_type_diff_source3_p <- Part_overlap_diff_type_diff_source[c(((i*10)+1):((i+1)*10)),]
+  ggplot(No_overlap_same_type_diff_source3_p, aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Type)) +
+    geom_gene_arrow() +
+    facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) +
+    # scale_fill_brewer(palette = "Set3") +
+    theme_genes()
+  ggsave(width=6,height=8,filename=paste0("../Results/3.Preliminary_Analysis/GeneMap_Test/Partoverlap_difftype_diffsource/plot_",i,".pdf"),limitsize = FALSE)
+}
+```
+
+#### Combine all data and filter.
+*Need to know that: although we are deal with the part of overlap data. after that, there should no more part of overlap data.*
+```{r}
+Part_overlap_final_data <- rbind(Part_overlap_same_type_same_source2,Part_overlap_same_type_diff_source2,Part_overlap_diff_type_diff_source2) %>% unique()
+Part_overlap_final_data_remove <- rbind(Part_overlap_same_type_same_source3,Part_overlap_same_type_diff_source3,Part_overlap_diff_type_diff_source3) %>% unique()
+```
+
+#### Draw the genemap plots
+```{r}
+Part_overlap_final_data2 <- Part_overlap_final_data %>% dplyr::group_by(Part_overlap_final_data$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame()
+Part_overlap_final_data2$Plasmid_ID <- as.character(droplevels(Part_overlap_final_data2$Plasmid_ID))
+Part_overlap_final_data2$System_Beg <- as.numeric(Part_overlap_final_data2$System_Beg)
+Part_overlap_final_data2$System_End <- as.numeric(Part_overlap_final_data2$System_End)
+Part_overlap_final_data3 <- Part_overlap_final_data2
+ggplot(Part_overlap_final_data3, aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Type)) + 
+  geom_gene_arrow() + 
+  facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) + 
+  # scale_fill_brewer(palette = "Set3") + 
+  theme_genes()
+ggsave(width=6,height=10,filename="../Results/3.Preliminary_Analysis/GeneMap_Test/test2.pdf",limitsize = FALSE)
+```
+
+### None overlap data
+#### None overlap data - Same Type Same Source.
+```{r}
+# combined22 <- setdiff(combined20[,c(1:20)],Part_overlap_same_type_diff_source3) %>% unique()
+combined22 <- setdiff(combined19,Part_overlap_diff_type_diff_source3) %>% unique()
+combined23 <- combined22 %>% dplyr::group_by(combined22$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame()
+combined23$Count_Number <- c(1:length(combined23$Plasmid_ID))
+combined23$No_overlap_system_dis_tooclose <- "None"
+combined23$No_overlap_system_dis_tooclose_original <- 5000000
+combined23$No_overlap_system_dis_toofar_original <- 5000000
+combined23$No_overlap_system_dis_toofar <- "None"
+combined23$No_overlap_same_type_same_source <- "None"
+combined23$No_overlap_same_type_diff_source <- "None"
+combined23$No_overlap_diff_type_keep_both <- "None"
+combined23$Plasmid_ID <- as.factor(combined23$Plasmid_ID)
+combined24 <- combined23[,c(-21)]
+
+# Remove the Included data in part overlap data second.
+for (i in 1:(length(levels(droplevels(combined23$Plasmid_ID))))) {
+  System_var1 <- levels(droplevels(combined23$Plasmid_ID))[i] # select the plasmid name
+  selected_dataframe <- combined23 %>% filter(combined23$Plasmid_ID == System_var1) # select same plasmid
+  dataframelength <- length(selected_dataframe$Count_Number) # how many defense system in one plasmid
+  plasmid_length <- selected_dataframe$Length[1]
+  # System1 in dataframe
+  
+  for (j in 1:(dataframelength-1)) {
+    System_beg1 <- selected_dataframe$System_Beg[j] # first plasmid begin
+    System_end1 <- selected_dataframe$System_End[j] # first plasmid end
+    System_type1 <- selected_dataframe$Defense_System_Type[j] # first plasmid type name
+    System_length1 <- selected_dataframe$Defense_System_Length[j] # first plasmid length
+    System_source1 <- selected_dataframe$Source[j] # first plasmid source
+    System_recordnumber1 <- selected_dataframe$Count_Number[j] # first record number in the sheet
+    
+    # System2 in dataframe
+    for (k in (j+1):dataframelength) {
+      System_beg2 <- selected_dataframe$System_Beg[k] # second plasmid begin
+      System_end2 <- selected_dataframe$System_End[k] # second plasmid end
+      System_type2 <- selected_dataframe$Defense_System_Type[k] # second plasmid type name
+      System_length2 <- selected_dataframe$Defense_System_Length[k] # second plasmid length
+      System_source2 <- selected_dataframe$Source[k] # second plasmid source
+      System_recordnumber2 <- selected_dataframe$Count_Number[k] # second record number in the sheet
+      
+      if (System_length1 < System_length2) {
+        longer_defensesystem <- System_recordnumber2
+      } else if (System_length1 > System_length2) {
+        longer_defensesystem <- System_recordnumber1
+      } else if (System_length1 == System_length2) {
+        longer_defensesystem = c(System_recordnumber1) # If the length is the same, I will just keep one of them.
+      }
+      
+      # No overlap
+      if ((System_end1 < System_beg2) | (System_end2 < System_beg1)) {
+        if (System_type1 == System_type2) {
+          if (System_source1 == System_source2) {
+            combined24$No_overlap_same_type_same_source[c(System_recordnumber1,System_recordnumber2)] <- "Yes!"
+            if (min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)) <= combined24$No_overlap_system_dis_tooclose_original[System_recordnumber1]) {
+              combined24$No_overlap_system_dis_tooclose[System_recordnumber1] <- min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))
+              combined24$No_overlap_system_dis_tooclose_original[System_recordnumber1] <- min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))
+            }
+            if (min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)) < combined24$No_overlap_system_dis_tooclose_original[System_recordnumber2]) {
+              combined24$No_overlap_system_dis_tooclose[System_recordnumber2] <- min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))
+              combined24$No_overlap_system_dis_tooclose_original[System_recordnumber2] <- min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))
+            }
+            
+            if ((plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))) < combined24$No_overlap_system_dis_toofar_original[System_recordnumber1]) {
+              combined24$No_overlap_system_dis_toofar[System_recordnumber1] <- (plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)))
+              combined24$No_overlap_system_dis_toofar_original[System_recordnumber1] <- (plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)))
+            }
+            if ((plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))) < combined24$No_overlap_system_dis_toofar_original[System_recordnumber2]) {
+              combined24$No_overlap_system_dis_toofar[System_recordnumber2] <- (plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)))
+              combined24$No_overlap_system_dis_toofar_original[System_recordnumber2] <- (plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)))
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# NEED TO COMBINE THE DATA HERE.
+
+# Output Files
+combined24$No_overlap_system_dis_tooclose <- as.numeric(combined24$No_overlap_system_dis_tooclose)
+combined24$No_overlap_system_dis_toofar <- as.numeric(combined24$No_overlap_system_dis_toofar)
+
+No_overlap_same_type_same_source <- combined24[,c(1:20,22:23)] %>% filter(combined24$No_overlap_same_type_same_source != "None") # keep the longer one/combine them preview
+write.table(No_overlap_same_type_same_source, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/No_overlap_same_type_same_source_preview.txt", row.names = F, sep = "\t")
+No_overlap_same_type_same_source2 <- combined24[,c(1:20,22:23)] %>% filter(combined24$No_overlap_same_type_same_source != "None" & combined24$No_overlap_system_dis_tooclose > 5000)
+No_overlap_same_type_same_source3 <- combined24[,c(1:20,22:23)] %>% filter(combined24$No_overlap_same_type_same_source != "None" & combined24$No_overlap_system_dis_tooclose <= 5000)
+No_overlap_same_type_same_source4 <- No_overlap_same_type_same_source3[,c(1:20)] %>% unique()
+write.table(No_overlap_same_type_same_source4, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/No_overlap_same_type_same_source_tooclose.txt", row.names = F, sep = "\t")
+
+No_overlap_same_type_same_source2_1 <- combined24[,c(1:20,22:23)] %>% filter(combined24$No_overlap_same_type_same_source != "None" & combined24$No_overlap_system_dis_toofar > 5000)
+No_overlap_same_type_same_source3_1 <- combined24[,c(1:20,22:23)] %>% filter(combined24$No_overlap_same_type_same_source != "None" & combined24$No_overlap_system_dis_toofar <= 5000)
+
+
+# Combine the same type same source data into one record.
+No_overlap_same_type_same_source5 <- No_overlap_same_type_same_source4
+No_overlap_same_type_same_source5$Tag <- "None"
+for (t in 1:(length(No_overlap_same_type_same_source5$Plasmid_ID)/2)) {
+  No_overlap_same_type_same_source5$Tag[2*t-1] <- "Choose this one!"
+  No_overlap_same_type_same_source5$System_Beg_new[c((2*t-1),2*t)] <- min(No_overlap_same_type_same_source4$System_Beg[2*t-1],No_overlap_same_type_same_source4$System_Beg[2*t])
+  No_overlap_same_type_same_source5$System_End_new[c((2*t-1),2*t)] <- max(No_overlap_same_type_same_source4$System_End[2*t-1],No_overlap_same_type_same_source4$System_End[2*t])
+}
+No_overlap_same_type_same_source6 <- No_overlap_same_type_same_source5 %>% filter(No_overlap_same_type_same_source5$Tag != "None")
+write.table(No_overlap_same_type_same_source6, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/No_overlap_same_type_same_source_aftercombine.txt", row.names = F, sep = "\t")
+No_overlap_same_type_same_source7 <- No_overlap_same_type_same_source5 %>% filter(No_overlap_same_type_same_source5$Tag == "None")
+write.table(No_overlap_same_type_same_source7, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/No_overlap_same_type_same_source_aftercombine_delete.txt", row.names = F, sep = "\t")
+# for (t in 1:(length(levels(droplevels(No_overlap_same_type_same_source5$Plasmid_ID))))) {
+#   Wait_System_var1 <- levels(droplevels(No_overlap_same_type_same_source5$Plasmid_ID))[t] # select the plasmid name
+#   Wait_selected_dataframe <- No_overlap_same_type_same_source5 %>% filter(No_overlap_same_type_same_source5$Plasmid_ID == Wait_System_var1) # select same plasmid
+#   Wait_dataframelength <- length(Wait_selected_dataframe$Count_Number) # how many defense system in one plasmid
+#   # Wait_plasmid_length <- Wait_selected_dataframe$Length[1]
+#   # System1 in dataframe
+#   for (p in 1:(Wait_dataframelength-1)) {
+#     System_beg1 <- Wait_selected_dataframe$System_Beg[p] # first plasmid begin
+#     System_end1 <- Wait_selected_dataframe$System_End[p] # first plasmid end
+#     System_type1 <- Wait_selected_dataframe$Defense_System_Type[p] # first plasmid type name
+#     # System_length1 <- Wait_selected_dataframe$Defense_System_Length[p] # first plasmid length
+#     System_source1 <- Wait_selected_dataframe$Source[p] # first plasmid source
+#     System_recordnumber1 <- Wait_selected_dataframe$Count_Number[p] # first record number in the sheet
+# 
+#     # System2 in dataframe
+#     for (q in (j+1):Wait_dataframelength) {
+#       System_beg2 <- Wait_selected_dataframe$System_Beg[q] # second plasmid begin
+#       System_end2 <- Wait_selected_dataframe$System_End[q] # second plasmid end
+#       System_type2 <- Wait_selected_dataframe$Defense_System_Type[q] # second plasmid type name
+#       # System_length2 <- Wait_selected_dataframe$Defense_System_Length[q] # second plasmid length
+#       System_source2 <- Wait_selected_dataframe$Source[q] # second plasmid source
+#       System_recordnumber2 <- Wait_selected_dataframe$Count_Number[q] # second record number in the sheet
+# 
+#       # No overlap
+#       if (System_type1 == System_type2) {
+#         if (System_source1 == System_source2) {
+#           No_overlap_same_type_same_source5$Tag[System_recordnumber1] <- "Choose this one!"
+#           No_overlap_same_type_same_source5$System_Beg[c(System_recordnumber1,System_recordnumber2)] <- min(System_beg1,System_beg2)
+#           No_overlap_same_type_same_source5$System_End[c(System_recordnumber1,System_recordnumber2)] <- max(System_end1,System_end2)
+#         }
+#       }
+#     }
+#   }
+# }
+
+No_overlap_same_type_same_source3 <- No_overlap_same_type_same_source3 %>% dplyr::group_by(No_overlap_same_type_same_source3$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame() # Select the plasmids have mutiple systems. only there are 225 records.
+No_overlap_same_type_same_source3$Plasmid_ID <- droplevels(as.factor(No_overlap_same_type_same_source3$Plasmid_ID))
+No_overlap_same_type_same_source3 <- No_overlap_same_type_same_source3[order(No_overlap_same_type_same_source3$Plasmid_ID),]
+No_overlap_same_type_same_source3$System_Beg <- as.numeric(No_overlap_same_type_same_source3$System_Beg)
+No_overlap_same_type_same_source3$System_End <- as.numeric(No_overlap_same_type_same_source3$System_End)
+
+for (i in 1:11) {
+  No_overlap_same_type_same_source3_p <- No_overlap_same_type_same_source3[c((i*10):((i+1)*10)),]
+  ggplot(No_overlap_same_type_same_source3_p, aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Type)) +
+    geom_gene_arrow() +
+    facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) +
+    # scale_fill_brewer(palette = "Set3") +
+    theme_genes()
+  ggsave(width=6,height=8,filename=paste0("../Results/3.Preliminary_Analysis/GeneMap_Test/Nooverlap_sametype_samesource_underthreshould/plot_",i,".pdf"),limitsize = FALSE)
+}
+
+
+No_overlap_same_type_same_source3_1 <- No_overlap_same_type_same_source3_1 %>% dplyr::group_by(No_overlap_same_type_same_source3_1$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame() # Select the plasmids have mutiple systems. only there are 225 records.
+No_overlap_same_type_same_source3_1$Plasmid_ID <- droplevels(as.factor(No_overlap_same_type_same_source3_1$Plasmid_ID))
+No_overlap_same_type_same_source3_1 <- No_overlap_same_type_same_source3_1[order(No_overlap_same_type_same_source3_1$Plasmid_ID),]
+No_overlap_same_type_same_source3_1$System_Beg <- as.numeric(No_overlap_same_type_same_source3_1$System_Beg)
+No_overlap_same_type_same_source3_1$System_End <- as.numeric(No_overlap_same_type_same_source3_1$System_End)
+ggplot(No_overlap_same_type_same_source3_1, aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Type)) +
+    geom_gene_arrow() +
+    facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) +
+    # scale_fill_brewer(palette = "Set3") +
+    theme_genes()
+ggsave(width=6,height=8,filename=paste0("../Results/3.Preliminary_Analysis/GeneMap_Test/Nooverlap_sametype_samesource_underthreshould/toofar.pdf"),limitsize = FALSE)
+```
+
+#### None overlap data - Same Type Different Source.
+```{r}
+# combined25 <- setdiff(combined23[,c(1:20)],No_overlap_same_type_same_source4) %>% unique()
+combined25 <- setdiff(combined22[,c(1:20)],No_overlap_same_type_same_source7[,c(1:20)]) %>% unique()
+combined26 <- combined25 %>% dplyr::group_by(combined25$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame()
+combined26$Count_Number <- c(1:length(combined26$Plasmid_ID))
+combined26$No_overlap_system_dis_tooclose <- "None"
+combined26$No_overlap_system_dis_tooclose_original <- 5000000
+combined26$No_overlap_system_dis_toofar_original <- 5000000
+combined26$No_overlap_system_dis_toofar <- "None"
+combined26$No_overlap_same_type_same_source <- "None"
+combined26$No_overlap_same_type_diff_source <- "None"
+combined26$No_overlap_diff_type_keep_both <- "None"
+combined26$Plasmid_ID <- as.factor(combined26$Plasmid_ID)
+combined27 <- combined26[,c(-21)]
+
+# Remove the Included data in part overlap data second.
+for (i in 1:(length(levels(droplevels(combined26$Plasmid_ID))))) {
+  System_var1 <- levels(droplevels(combined26$Plasmid_ID))[i] # select the plasmid name
+  selected_dataframe <- combined26 %>% filter(combined26$Plasmid_ID == System_var1) # select same plasmid
+  dataframelength <- length(selected_dataframe$Count_Number) # how many defense system in one plasmid
+  plasmid_length <- selected_dataframe$Length[1]
+  # System1 in dataframe
+  for (j in 1:(dataframelength-1)) {
+    System_beg1 <- selected_dataframe$System_Beg[j] # first plasmid begin
+    System_end1 <- selected_dataframe$System_End[j] # first plasmid end
+    System_type1 <- selected_dataframe$Defense_System_Type[j] # first plasmid type name
+    System_length1 <- selected_dataframe$Defense_System_Length[j] # first plasmid length
+    System_source1 <- selected_dataframe$Source[j] # first plasmid source
+    System_recordnumber1 <- selected_dataframe$Count_Number[j] # first record number in the sheet
+    # System2 in dataframe
+    for (k in (j+1):dataframelength) {
+      System_beg2 <- selected_dataframe$System_Beg[k] # second plasmid begin
+      System_end2 <- selected_dataframe$System_End[k] # second plasmid end
+      System_type2 <- selected_dataframe$Defense_System_Type[k] # second plasmid type name
+      System_length2 <- selected_dataframe$Defense_System_Length[k] # second plasmid length
+      System_source2 <- selected_dataframe$Source[k] # second plasmid source
+      System_recordnumber2 <- selected_dataframe$Count_Number[k] # second record number in the sheet
+      
+      if (System_length1 < System_length2) {
+        longer_defensesystem <- System_recordnumber2
+      } else if (System_length1 > System_length2) {
+        longer_defensesystem <- System_recordnumber1
+      } else if (System_length1 == System_length2) {
+        longer_defensesystem = c(System_recordnumber1) # If the length is the same, I will just keep one of them.
+      }
+      
+      # No overlap
+      if ((System_end1 < System_beg2) | (System_end2 < System_beg1)) {
+        if (System_type1 == System_type2) {
+          if (System_source1 != System_source2) {
+            combined27$No_overlap_same_type_diff_source[c(System_recordnumber1,System_recordnumber2)] <- "Need_Check"
+            if (min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)) < combined27$No_overlap_system_dis_tooclose_original[System_recordnumber1]) {
+              combined27$No_overlap_system_dis_tooclose[System_recordnumber1] <- min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))
+              combined27$No_overlap_system_dis_tooclose_original[System_recordnumber1] <- min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))
+            }
+            if (min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)) < combined27$No_overlap_system_dis_tooclose_original[System_recordnumber2]) {
+              combined27$No_overlap_system_dis_tooclose[System_recordnumber2] <- min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))
+              combined27$No_overlap_system_dis_tooclose_original[System_recordnumber2] <- min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))
+            }
+            
+            if ((plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))) < combined27$No_overlap_system_dis_toofar_original[System_recordnumber1]) {
+              combined27$No_overlap_system_dis_toofar[System_recordnumber1] <- (plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)))
+              combined27$No_overlap_system_dis_toofar_original[System_recordnumber1] <- (plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)))
+            }
+            if ((plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))) < combined27$No_overlap_system_dis_toofar_original[System_recordnumber2]) {
+              combined27$No_overlap_system_dis_toofar[System_recordnumber2] <- (plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)))
+              combined27$No_overlap_system_dis_toofar_original[System_recordnumber2] <- (plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)))
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+
+# NEED TO COMBINE THE DATA HERE.
+
+# Output Files
+combined27$No_overlap_system_dis_tooclose <- as.numeric(combined27$No_overlap_system_dis_tooclose)
+combined27$No_overlap_system_dis_toofar <- as.numeric(combined27$No_overlap_system_dis_toofar)
+
+No_overlap_same_type_diff_source <- combined27[,c(1:20,22:23)] %>% filter(combined27$No_overlap_same_type_diff_source != "None") # keep the longer one/combine them preview
+write.table(No_overlap_same_type_diff_source, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/No_overlap_same_type_diff_source_preview.txt", row.names = F, sep = "\t")
+No_overlap_same_type_diff_source2 <- combined27[,c(1:20,22:23)] %>% filter(combined27$No_overlap_same_type_diff_source != "None" & combined27$No_overlap_system_dis_tooclose > 5000)
+No_overlap_same_type_diff_source3 <- combined27[,c(1:20,22:23)] %>% filter(combined27$No_overlap_same_type_diff_source != "None" & combined27$No_overlap_system_dis_tooclose <= 5000)
+
+No_overlap_same_type_diff_source2_1 <- combined27[,c(1:20,24:25,27)] %>% filter(combined27$No_overlap_same_type_diff_source != "None" & combined27$No_overlap_system_dis_toofar > 5000)
+No_overlap_same_type_diff_source3_1 <- combined27[,c(1:20,24:25,27)] %>% filter(combined27$No_overlap_same_type_diff_source != "None" & combined27$No_overlap_system_dis_toofar <= 5000)
+No_overlap_same_type_diff_source3_2 <- No_overlap_same_type_diff_source3_1 %>% filter(No_overlap_same_type_diff_source3_1$Plasmid_ID != c("CP066835.1","NZ_CP031506.1"))
+
+No_overlap_same_type_diff_source4 <- No_overlap_same_type_diff_source3[,c(1:20)] %>% unique()
+write.table(No_overlap_same_type_diff_source4, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/No_overlap_same_type_diff_source_tooclose.txt", row.names = F, sep = "\t")
+
+No_overlap_same_type_diff_source5 <- No_overlap_same_type_diff_source4 %>% filter(No_overlap_same_type_diff_source4$Source != "DefenseFinder")
+write.table(No_overlap_same_type_diff_source5, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/No_overlap_same_type_diff_aftercombined.txt", row.names = F, sep = "\t")
+
+No_overlap_same_type_diff_source6 <- No_overlap_same_type_diff_source4 %>% filter(No_overlap_same_type_diff_source4$Source == "DefenseFinder")
+write.table(No_overlap_same_type_diff_source6, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/No_overlap_same_type_diff_aftercombined_delete.txt", row.names = F, sep = "\t")
+
+
+No_overlap_same_type_diff_source3 <- No_overlap_same_type_diff_source3 %>% dplyr::group_by(No_overlap_same_type_diff_source3$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame() # Select the plasmids have mutiple systems. only there are 225 records.
+No_overlap_same_type_diff_source3$Plasmid_ID <- droplevels(as.factor(No_overlap_same_type_diff_source3$Plasmid_ID))
+No_overlap_same_type_diff_source3 <- No_overlap_same_type_diff_source3[order(No_overlap_same_type_diff_source3$Plasmid_ID),]
+No_overlap_same_type_diff_source3$System_Beg <- as.numeric(No_overlap_same_type_diff_source3$System_Beg)
+No_overlap_same_type_diff_source3$System_End <- as.numeric(No_overlap_same_type_diff_source3$System_End)
+
+for (i in 1:113) {
+  No_overlap_same_type_diff_source3_p <- No_overlap_same_type_diff_source3[c(((i*10)+1):((i+1)*10)),]
+  ggplot(No_overlap_same_type_diff_source3_p, aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Type)) +
+    geom_gene_arrow() +
+    facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) +
+    # scale_fill_brewer(palette = "Set3") +
+    theme_genes()
+  ggsave(width=6,height=8,filename=paste0("../Results/3.Preliminary_Analysis/GeneMap_Test/Nooverlap_sametype_diffsource_underthreshould/plot_",i,".pdf"),limitsize = FALSE)
+}
+
+
+No_overlap_same_type_diff_source3_2 <- No_overlap_same_type_diff_source3_2 %>% dplyr::group_by(No_overlap_same_type_diff_source3_2$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame() # Select the plasmids have mutiple systems. only there are 225 records.
+No_overlap_same_type_diff_source3_2$Plasmid_ID <- droplevels(as.factor(No_overlap_same_type_diff_source3_2$Plasmid_ID))
+No_overlap_same_type_diff_source3_2 <- No_overlap_same_type_diff_source3_2[order(No_overlap_same_type_diff_source3_2$Plasmid_ID),]
+No_overlap_same_type_diff_source3_2$System_Beg <- as.numeric(No_overlap_same_type_diff_source3_2$System_Beg)
+No_overlap_same_type_diff_source3_2$System_End <- as.numeric(No_overlap_same_type_diff_source3_2$System_End)
+ggplot(No_overlap_same_type_diff_source3_2, aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Type)) +
+    geom_gene_arrow() +
+    facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) +
+    # scale_fill_brewer(palette = "Set3") +
+    theme_genes()
+ggsave(width=6,height=8,filename=paste0("../Results/3.Preliminary_Analysis/GeneMap_Test/Nooverlap_sametype_diffsource_underthreshould/toofar.pdf"),limitsize = FALSE)
+```
+
+#### None overlap data - Different Type Different Source.
+```{r}
+combined28 <- setdiff(combined26[,c(1:20)],No_overlap_same_type_diff_source6) %>% unique() # Final data.
+combined29 <- combined28 %>% dplyr::group_by(combined28$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame()
+combined29$Count_Number <- c(1:length(combined29$Plasmid_ID))
+combined29$No_overlap_system_dis_tooclose <- "None"
+combined29$No_overlap_system_dis_tooclose_original <- 5000000
+combined29$No_overlap_system_dis_toofar_original <- 5000000
+combined29$No_overlap_system_dis_toofar <- "None"
+combined29$No_overlap_same_type_same_source <- "None"
+combined29$No_overlap_same_type_diff_source <- "None"
+combined29$No_overlap_diff_type_keep_both <- "None"
+combined29$Plasmid_ID <- as.factor(combined29$Plasmid_ID)
+combined30 <- combined29[,c(-21)]
+
+# Remove the Included data in part overlap data second.
+for (i in 1:(length(levels(droplevels(combined29$Plasmid_ID))))) {
+  System_var1 <- levels(droplevels(combined29$Plasmid_ID))[i] # select the plasmid name
+  selected_dataframe <- combined29 %>% filter(combined29$Plasmid_ID == System_var1) # select same plasmid
+  dataframelength <- length(selected_dataframe$Count_Number) # how many defense system in one plasmid
+  plasmid_length <- selected_dataframe$Length[1]
+  # System1 in dataframe
+  for (j in 1:(dataframelength-1)) {
+    System_beg1 <- selected_dataframe$System_Beg[j] # first plasmid begin
+    System_end1 <- selected_dataframe$System_End[j] # first plasmid end
+    System_type1 <- selected_dataframe$Defense_System_Type[j] # first plasmid type name
+    System_length1 <- selected_dataframe$Defense_System_Length[j] # first plasmid length
+    System_source1 <- selected_dataframe$Source[j] # first plasmid source
+    System_recordnumber1 <- selected_dataframe$Count_Number[j] # first record number in the sheet
+    # System2 in dataframe
+    for (k in (j+1):dataframelength) {
+      System_beg2 <- selected_dataframe$System_Beg[k] # second plasmid begin
+      System_end2 <- selected_dataframe$System_End[k] # second plasmid end
+      System_type2 <- selected_dataframe$Defense_System_Type[k] # second plasmid type name
+      System_length2 <- selected_dataframe$Defense_System_Length[k] # second plasmid length
+      System_source2 <- selected_dataframe$Source[k] # second plasmid source
+      System_recordnumber2 <- selected_dataframe$Count_Number[k] # second record number in the sheet
+      
+      if (System_length1 < System_length2) {
+        longer_defensesystem <- System_recordnumber2
+      } else if (System_length1 > System_length2) {
+        longer_defensesystem <- System_recordnumber1
+      } else if (System_length1 == System_length2) {
+        longer_defensesystem = c(System_recordnumber1) # If the length is the same, I will just keep one of them.
+      }
+      
+      # No overlap
+      if ((System_end1 < System_beg2) | (System_end2 < System_beg1)) {
+        if (min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)) < combined30$No_overlap_system_dis_tooclose_original[System_recordnumber1]) {
+          combined30$No_overlap_system_dis_tooclose[System_recordnumber1] <- min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))
+          combined30$No_overlap_system_dis_tooclose_original[System_recordnumber1] <- min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))
+        }
+        if (min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)) < combined30$No_overlap_system_dis_tooclose_original[System_recordnumber2]) {
+          combined30$No_overlap_system_dis_tooclose[System_recordnumber2] <- min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))
+          combined30$No_overlap_system_dis_tooclose_original[System_recordnumber2] <- min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))
+        }
+        
+        if ((plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))) < combined30$No_overlap_system_dis_toofar_original[System_recordnumber1]) {
+          combined30$No_overlap_system_dis_toofar[System_recordnumber1] <- (plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)))
+          combined30$No_overlap_system_dis_toofar_original[System_recordnumber1] <- (plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)))
+        }
+        if ((plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2))) < combined30$No_overlap_system_dis_toofar_original[System_recordnumber2]) {
+          combined30$No_overlap_system_dis_toofar[System_recordnumber2] <- (plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)))
+          combined30$No_overlap_system_dis_toofar_original[System_recordnumber2] <- (plasmid_length - System_length1 - System_length2 - min(abs(System_beg2 - System_end1),abs(System_beg1 - System_end2)))
+        }
+        
+        if (System_type1 == System_type2) {
+          if (System_source1 == System_source2) {
+            combined30$No_overlap_same_type_same_source[c(System_recordnumber1,System_recordnumber2)] <- "Need_Check"
+          } else if (System_source1 != System_source2) {
+            combined30$No_overlap_same_type_diff_source[c(System_recordnumber1,System_recordnumber2)] <- "Need_Check"
+          }
+        } else if (System_type1 != System_type2) {
+          combined30$No_overlap_diff_type_keep_both[c(System_recordnumber1,System_recordnumber2)] <- "Need_Check"
+        }
+      }
+    }
+  }
+}
+
+# NEED TO COMBINE THE DATA HERE.
+
+# Output Files
+combined30$No_overlap_system_dis_tooclose <- as.numeric(combined30$No_overlap_system_dis_tooclose)
+combined30$No_overlap_system_dis_toofar <- as.numeric(combined30$No_overlap_system_dis_toofar)
+
+No_overlap_diff_type_diff_source <- combined30[,c(1:20,22:25)] %>% filter(combined30$No_overlap_diff_type_keep_both != "None") # keep the longer one/combine them preview
+write.table(No_overlap_diff_type_diff_source, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/No_overlap_same_type_diff_source_preview.txt", row.names = F, sep = "\t")
+No_overlap_diff_type_diff_source2 <- combined30[,c(1:20,22:25)] %>% filter(combined30$No_overlap_diff_type_keep_both != "None" & combined30$No_overlap_system_dis_tooclose > 5000)
+No_overlap_diff_type_diff_source3 <- combined30[,c(1:20,22:25)] %>% filter(combined30$No_overlap_diff_type_keep_both != "None" & combined30$No_overlap_system_dis_tooclose <= 5000)
+No_overlap_diff_type_diff_source4 <- No_overlap_diff_type_diff_source3[,c(1:20)] %>% unique()
+write.table(No_overlap_diff_type_diff_source4, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/No_overlap_diff_type_diff_source_tooclose.txt", row.names = F, sep = "\t")
+write.table(combined28, file = "../Results/2.Combined_Data/DefenseFinder_Padloc_Combine/Final_data.txt", row.names = F, sep = "\t")
+
+
+No_overlap_diff_type_diff_source3 <- No_overlap_diff_type_diff_source3 %>% dplyr::group_by(No_overlap_diff_type_diff_source3$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame() # Select the plasmids have mutiple systems. only there are 225 records.
+No_overlap_diff_type_diff_source3$Plasmid_ID <- droplevels(as.factor(No_overlap_diff_type_diff_source3$Plasmid_ID))
+No_overlap_diff_type_diff_source3 <- No_overlap_diff_type_diff_source3[order(No_overlap_diff_type_diff_source3$Plasmid_ID),]
+No_overlap_diff_type_diff_source3$System_Beg <- as.numeric(No_overlap_diff_type_diff_source3$System_Beg)
+No_overlap_diff_type_diff_source3$System_End <- as.numeric(No_overlap_diff_type_diff_source3$System_End)
+
+for (i in 1:122) {
+  No_overlap_same_type_diff_source3_p <- No_overlap_diff_type_diff_source3[c(((i*10)+1):((i+1)*10)),]
+  ggplot(No_overlap_same_type_diff_source3_p, aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Type)) +
+    geom_gene_arrow() +
+    facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) +
+    # scale_fill_brewer(palette = "Set3") +
+    theme_genes()
+  ggsave(width=6,height=8,filename=paste0("../Results/3.Preliminary_Analysis/GeneMap_Test/Nooverlap_difftype_diffsource_underthreshould/plot_",i,".pdf"),limitsize = FALSE)
+}
+```
+
+### Fin.
+
+------------------
+
+<!-- #### Get the threshould. -->
+<!-- ##### Select the same type from the same source. -->
+<!-- ```{r} -->
+<!-- # threshould plot - too close. -->
+<!-- plotdata <- as.data.frame(No_overlap_same_type_same_source[,c("Plasmid_ID","No_overlap_system_dis_tooclose")]) %>% droplevels() -->
+<!-- plotdata$sysdis <- 1 -->
+<!-- plotdata$count <- 1 -->
+
+<!-- group_number <- ceiling(max(plotdata$No_overlap_system_dis_tooclose)/500) # 10kb as a group. -->
+<!-- plotdata_x <- list() -->
+<!-- for (i in 1:group_number) { -->
+<!--   try({ -->
+<!--     plotdata_x[[i]] <- plotdata %>% filter(plotdata$No_overlap_system_dis_tooclose >= ((i-1)*500) & plotdata$No_overlap_system_dis_tooclose < i*500) -->
+<!--     plotdata_x[[i]]$sysdis <- i*5 -->
+<!--   }) -->
+<!-- } -->
+<!-- plotdata_y <- data.frame() -->
+<!-- for (j in 1:(length(plotdata_x))) { -->
+<!--   if (j == 1) { -->
+<!--     plotdata_y <- plotdata_x[[1]] -->
+<!--   } else if (j != 1) { -->
+<!--     plotdata_y <- rbind(plotdata_y,plotdata_x[[(j)]]) -->
+<!--   } -->
+<!-- } -->
+<!-- plotdata_y$sysdis <- as.factor(plotdata_y$sysdis) -->
+<!-- plotdata_y$count <- as.numeric(plotdata_y$count) -->
+<!-- plotdata_y_sum <- aggregate(plotdata_y$count, by = list(plotdata_y$sysdis), sum) -->
+<!-- plotdata_y_sum2 <- plotdata_y_sum %>% rename(System_Distance = Group.1, Nb_of_records = x) -->
+
+<!-- plotdata_y_sum2$System_Distance <- as.numeric(plotdata_y_sum2$System_Distance) -->
+
+<!-- ggplot(data=plotdata_y_sum2, mapping=aes(x=System_Distance,y=Nb_of_records)) + geom_smooth() + geom_point() -->
+
+<!-- if(do.write){ -->
+<!--   ggsave(width=8,height=6,filename="../Results/2.Combined_Data/Process_split_file/No_overlap_same_type_same_source2.pdf",limitsize = FALSE) -->
+<!-- } -->
+<!-- No_overlap_same_type_same_source_use <- combined13 %>% filter(combined13$No_overlap_same_type_same_source != "None" & combined13$No_overlap_system_dis_tooclose > 7500) -->
+<!-- ``` -->
+
+<!-- ##### Select the same type from the diff source. -->
+<!-- ```{r} -->
+<!-- # Should combine them or select them, so that we can have another step to deal. -->
+
+<!-- No_overlap_same_type_diff_source <- combined13 %>% filter(combined13$No_overlap_same_type_diff_source != "None") -->
+<!-- No_overlap_same_type_diff_source2 <- rbind(No_overlap_same_type_diff_source,No_overlap_same_type_same_source_use) -->
+
+<!-- # threshould plot - too close. -->
+<!-- plotdata <- as.data.frame(No_overlap_same_type_diff_source2[,c("Plasmid_ID","No_overlap_system_dis_tooclose")]) %>% droplevels() -->
+<!-- plotdata$sysdis <- 1 -->
+<!-- plotdata$count <- 1 -->
+
+<!-- group_number <- ceiling(max(plotdata$No_overlap_system_dis_tooclose)/500) # 10kb as a group. -->
+<!-- plotdata_x <- list() -->
+<!-- for (i in 1:group_number) { -->
+<!--   try({ -->
+<!--     plotdata_x[[i]] <- plotdata %>% filter(plotdata$No_overlap_system_dis_tooclose >= ((i-1)*500) & plotdata$No_overlap_system_dis_tooclose < i*500) -->
+<!--     plotdata_x[[i]]$sysdis <- i*5 -->
+<!--   }) -->
+<!-- } -->
+<!-- plotdata_y <- data.frame() -->
+<!-- for (j in 1:(length(plotdata_x))) { -->
+<!--   if (j == 1) { -->
+<!--     plotdata_y <- plotdata_x[[1]] -->
+<!--   } else if (j != 1) { -->
+<!--     plotdata_y <- rbind(plotdata_y,plotdata_x[[(j)]]) -->
+<!--   } -->
+<!-- } -->
+<!-- plotdata_y$sysdis <- as.factor(plotdata_y$sysdis) -->
+<!-- plotdata_y$count <- as.numeric(plotdata_y$count) -->
+<!-- plotdata_y_sum <- aggregate(plotdata_y$count, by = list(plotdata_y$sysdis), sum) -->
+<!-- plotdata_y_sum2 <- plotdata_y_sum %>% rename(System_Distance = Group.1, Nb_of_records = x) -->
+
+<!-- plotdata_y_sum2$System_Distance <- as.numeric(plotdata_y_sum2$System_Distance) -->
+
+<!-- ggplot(data=plotdata_y_sum2, mapping=aes(x=System_Distance,y=Nb_of_records)) + geom_smooth()# + geom_point() -->
+
+<!-- if(do.write){ -->
+<!--   ggsave(width=8,height=6,filename="../Results/2.Combined_Data/Process_split_file/No_overlap_same_type_diff_source.pdf",limitsize = FALSE) -->
+<!-- } -->
+
+<!-- No_overlap_same_type_diff_source_use <- combined13 %>% filter(combined13$No_overlap_same_type_diff_source != "None" & combined13$No_overlap_system_dis_tooclose > 12500) -->
+<!-- ``` -->
+
+<!-- ##### Select the diff type from the diff source. (expected to keep them all) -->
+<!-- ```{r} -->
+<!-- No_overlap_diff_type_keep_both_source <- combined13 %>% filter(combined13$No_overlap_diff_type_keep_both != "None") %>% unique() -->
+<!-- No_overlap_diff_type_keep_both_source2 <- rbind(No_overlap_diff_type_keep_both_source,No_overlap_same_type_diff_source_use) %>% unique() -->
+
+<!-- # threshould plot - too close. -->
+<!-- plotdata <- as.data.frame(No_overlap_diff_type_keep_both_source2[,c("Plasmid_ID","No_overlap_system_dis_tooclose")]) %>% droplevels() -->
+<!-- plotdata$sysdis <- 1 -->
+<!-- plotdata$count <- 1 -->
+
+<!-- group_number <- ceiling(max(plotdata$No_overlap_system_dis_tooclose)/500) # 10kb as a group. -->
+<!-- plotdata_x <- list() -->
+<!-- for (i in 1:group_number) { -->
+<!--   try({ -->
+<!--     plotdata_x[[i]] <- plotdata %>% filter(plotdata$No_overlap_system_dis_tooclose >= ((i-1)*500) & plotdata$No_overlap_system_dis_tooclose < i*500) -->
+<!--     plotdata_x[[i]]$sysdis <- i*5 -->
+<!--   }) -->
+<!-- } -->
+<!-- plotdata_y <- data.frame() -->
+<!-- for (j in 1:(length(plotdata_x))) { -->
+<!--   if (j == 1) { -->
+<!--     plotdata_y <- plotdata_x[[1]] -->
+<!--   } else if (j != 1) { -->
+<!--     plotdata_y <- rbind(plotdata_y,plotdata_x[[(j)]]) -->
+<!--   } -->
+<!-- } -->
+<!-- plotdata_y$sysdis <- as.factor(plotdata_y$sysdis) -->
+<!-- plotdata_y$count <- as.numeric(plotdata_y$count) -->
+<!-- plotdata_y_sum <- aggregate(plotdata_y$count, by = list(plotdata_y$sysdis), sum) -->
+<!-- plotdata_y_sum2 <- plotdata_y_sum %>% rename(System_Distance = Group.1, Nb_of_records = x) -->
+
+<!-- plotdata_y_sum2$System_Distance <- as.numeric(plotdata_y_sum2$System_Distance) -->
+
+<!-- ggplot(data=plotdata_y_sum2, mapping=aes(x=System_Distance,y=Nb_of_records)) + geom_smooth() + geom_point() -->
+
+<!-- if(do.write){ -->
+<!--   ggsave(width=8,height=6,filename="../Results/2.Combined_Data/Process_split_file/No_overlap_diff_type_keep_both_source2.pdf",limitsize = FALSE) -->
+<!-- } -->
+
+<!-- No_overlap_same_type_diff_source_use <- combined13 %>% filter(combined13$No_overlap_diff_type_keep_both != "None" & combined13$No_overlap_system_dis_tooclose > 6500) -->
+
+
+<!-- # Output Files -->
+<!-- No_overlap_same_type_same_source <- combined13 %>% filter(combined13$No_overlap_same_type_same_source != "None") # keep the longer one/combine them preview -->
+<!-- No_overlap_same_type_same_source2 <- combined13 %>% filter(combined13$No_overlap_same_type_same_source != "None" & combined13$No_overlap_system_dis_tooclose >  7500) # keep the longer one done -->
+
+<!-- No_overlap_same_type_diff_source <- combined13 %>% filter(combined13$No_overlap_same_type_diff_source != "None") # keep the longer one/combine them preview -->
+<!-- No_overlap_same_type_diff_source2 <- combined13 %>% filter(combined13$No_overlap_same_type_diff_source != "None" & combined13$No_overlap_same_type_same_source == "None" & combined13$No_overlap_system_dis_tooclose > 12500) # keep the longer one done -->
+
+<!-- No_overlap_diff_type_keep_both <- combined13 %>% filter(combined13$No_overlap_diff_type_keep_both != "None") # keep the longer one/combine them preview -->
+<!-- No_overlap_diff_type_keep_both2 <- combined13 %>% filter(combined13$No_overlap_diff_type_keep_both != "None" & combined13$No_overlap_same_type_same_source == "None" & combined13$No_overlap_same_type_diff_source == "None" & combined13$No_overlap_system_dis_tooclose > 6500) # keep the longer one done -->
+
+<!-- No_overlap_final_data <- rbind(No_overlap_same_type_same_source2,No_overlap_same_type_diff_source2,No_overlap_diff_type_keep_both2) %>% unique() -->
+<!-- ``` -->
+
+#### See.
+```{r}
+testdata <- read.table("../Results/2.Combined_Data/Process_file/combine_padloc_defensefinder_original.txt", header = T)
+Included_final_data2 <- testdata %>% dplyr::group_by(testdata$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame() # Select the plasmids have mutiple systems. only there are 225 records.
+Included_final_data2$Plasmid_ID <- as.factor(Included_final_data2$Plasmid_ID)
+Included_final_data2$Plasmid_ID <- droplevels(Included_final_data2$Plasmid_ID)
+Included_final_data2 <- Included_final_data2[order(Included_final_data2$Plasmid_ID),]
+Included_final_data2$System_Beg <- as.numeric(Included_final_data2$System_Beg)
+Included_final_data2$System_End <- as.numeric(Included_final_data2$System_End)
+
+for (i in 1:475) {
+  Included_final_data3 <- Included_final_data2[c((i*10):((i+1)*10)),]
+  ggplot(Included_final_data3, aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Type)) +
+    geom_gene_arrow() +
+    facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) +
+    # scale_fill_brewer(palette = "Set3") +
+    theme_genes()
+  ggsave(width=6,height=8,filename=paste0("../Results/3.Preliminary_Analysis/GeneMap_Test/plot_",i,".pdf"),limitsize = FALSE)
+}
+```

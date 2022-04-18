@@ -1,0 +1,113 @@
+---
+title: "ggGene map"
+author: "Haotian Zheng"
+date: "10/04/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(ggrepel)
+library(ggplot2)
+library(ggrepel)
+library(gggenes)
+library(gg.gap)
+library(ggbreak)
+library(ggthemes)
+library(ggpubr)
+library(gtools)
+library(igraph)
+library(RColorBrewer)
+library(dplyr)
+library(plyr)
+library(reshape2)
+library(pheatmap)
+library(readxl)
+library(tibble)
+library(scales)
+library(psych)
+library(vegan)
+library(tidyverse)
+library(knitr)
+do.write <- F
+options(scipen = 200)
+color_my10 <- c("#EBEBF3","#F4EEEE","#0B89CF","#A7647A","#B4A9BC","#90A3BD","#39639B","#DF9599","#AACFDD","#D8757B")
+color_my41 <- c("#e63946","#457b9d","#a8dadc","#f4a261","#e76f51","#ff6b6b","#e5989b","#4ecdc4","#9bc1bc","#3d5a80","#cbf3f0","#d3bcc0","#bfc0c0","#b2967d","#9db4c0","#74546a","#84a59d","#bee3db","#f28482","#89b0ae","#4ecdc4","#fe5f55","#68d8d6","#ffd5c2","#77bfa3","#b8d8d8","#f694c1","#f7b267","#58a4b0","#f2cc8f","#a5668b","#f5cb5c","#06aed5","#ed6a5a","#5ca4a9","#ff715b","#59c3c3","#f4a261","#e63946","#fcb9b2","#8ac6d0")
+color_heatmap_bule_red <- c("#7E1712","#bd2113","#e3460c","#f07701","#f59525","#fccbb8","#f5e13a","#a3e2e1","#6ab7e1","#4f74bb","#472497")  # top_soil:深红1，深红2，橙色1，橙色2，中黄，肉色，柠檬黄，浅蓝2，浅蓝1，深蓝2，深蓝1
+color_4 <- c("#03a94d","#3846a2","#03b4c5","#eb2c3a") #绿色，深蓝，浅蓝，红色
+color_2 <- c("#04adef","#f15b2b") #天蓝，橙色
+color10 <- c('#8DD3C7', '#FFFFB3', '#BEBADA', '#FB8072', '#80B1D3', '#FDB462', '#B3DE69', '#FCCDE5', '#BC80BD', '#CCEBC5', 'gray')
+```
+
+### import data.
+```{r}
+argonaute_origin <- read.table("../Results/1.Original_Data/argonaute_origin_data.txt",header = T, check.names = F, sep = "\t")
+combined_data2 <- read.table("../Results/3.Preliminary_Analysis/all_combined_data.txt", header = T, check.names = F, sep = "\t")
+```
+
+
+#### ggGenes with argonaute.
+```{r}
+example_genes2 <- rbind(example_genes,example_genes)
+write.table(example_genes2, "../Results/3.Preliminary_Analysis/argoplot_test.txt", sep = "\t", row.names = F)
+
+example_genes2 <- read.table("../Results/3.Preliminary_Analysis/argoplot_test.txt", header = T, check.names = F)
+ggplot(example_genes, aes(xmin = start, xmax = end, y = molecule, fill = gene)) +
+  geom_gene_arrow() +
+  facet_grid(~ molecule, scales = "free") +
+  scale_fill_brewer(palette = "Set3")
+
+
+ ggplot2::ggplot(example_genes2, ggplot2::aes(xmin = start, xmax = end,
+                                                y = molecule)) +
+    geom_gene_arrow() +
+    geom_subgene_arrow(data = example_subgenes,
+          ggplot2::aes(xmin = start, xmax = end, xsubmin = from, xsubmax = to,
+                       y = molecule, fill = gene)) +
+    ggplot2::facet_wrap(~ molecule, scales = "free")
+
+ 
+ 
+ 
+ggplot(example_genes, aes(xmin = start, xmax = end, y = molecule, fill = gene)) +
+  geom_gene_arrow() +
+  facet_wrap(~ molecule, scales = "free", ncol = 1) +
+  scale_fill_brewer(palette = "Set3")
+```
+
+
+
+```{r}
+ar_data1 <- combined_data2[,-7] %>% filter(combined_data2$Plasmid_ID %in% argonaute_origin$Plasmid_ID)
+ar_data2 <- ar_data1 %>% filter(ar_data1$Defense_System_Type != "ARGONAUTE")
+ar_data3 <- rbind(ar_data2,argonaute_origin) %>% unique()
+
+
+argo_plot1 <- ar_data3[,c(1,3,4,5)]
+# argo_plot1 <- argonaute_origin[,c(1,3,4,5)]
+argo_plot1$System_Beg <- as.numeric(argo_plot1$System_Beg)
+argo_plot1$System_End <- as.numeric(argo_plot1$System_End)
+
+argo_plot2 <- argo_plot1[order(argo_plot1$System_Beg),]
+argo_plot3 <- argo_plot2[order(argo_plot2$Plasmid_ID),]
+
+# argo_plot2 <- argo_plot1 %>% filter(argo_plot1$Plasmid_ID == "AP018320.1")
+write.table(argo_plot3, "../Results/3.Preliminary_Analysis/argoplot.txt", sep = "\t", row.names = F)
+
+argo_plot4 <- read.table("../Results/3.Preliminary_Analysis/argoplot.txt", header = T, check.names = F)
+argo_plot4$System_Beg <- as.numeric(argo_plot4$System_Beg)
+argo_plot4$System_End <- as.numeric(argo_plot4$System_End)
+
+ggplot(argo_plot4[c(61:87),], aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Sub)) +
+  geom_gene_arrow() + 
+  facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) + 
+  scale_fill_brewer(palette = "Set3")
+
+
+if(do.write){
+  ggsave(width=10,height=8,filename="../Results/3.Preliminary_Analysis/test.pdf",limitsize = FALSE)
+```
+
+
+# Fin.
