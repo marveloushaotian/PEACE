@@ -10,8 +10,6 @@ output: html_document
 
 1. Find the distribution of defense system in the plasmid genomes.
 2. Caculate the percentage of each taxa data.
-3. 
-4. 
 
 ```{r, setup, include = FALSE}
 knitr::opts_chunk$set(echo = TRUE)

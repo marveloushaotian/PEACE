@@ -1,9 +1,62 @@
 ---
-title: "Padloc and Defensefinder data combine and filter."
+title: "Filter and combine padloc, defensefinder and cctyper output."
 author: "Haotian Zheng"
 date: "17/03/2022"
 output: html_document
 ---
+
+***This document is meant to record how to generate the output of padloc, defensefinder and crisprcastyper.***
+
+*Aim to:*
+
+3. Combine the output of defensefinder and padloc first.
+4. Join the cctyper output.
+
+
+### Combine the output of defensefinder and padloc first.
+
+*Principles*
+
+1. No overlap
+    + Same system type
+        + Same source:
+            + If the two system are close to the begin and the end of plasmid. Combine them into one record. **(No_overlap_same_type_same_source_too_far)**
+            + If the distance of the two system is lower then a threshold. Combine them into one record.? Otherwise combine them into one record. **(No_overlap_same_type_same_source_too_close)**
+        + Different source: 
+            + If the two system are close to the begin and the end of plasmid. Combine them into one record. **(No_overlap_same_type_diff_source_too_far)**
+            + If the distance of the two system is lower then a threshold. Combine them into one record.? Otherwise combine them into one record. **(No_overlap_same_type_diff_source_too_close)**
+    + Different system type
+            + Keep them both. **(No_overlap_diff_type_keep_both)**
+
+2. Part of overlap
+    + Same system type
+        + Same source
+            + Keep the longer one **(Part_overlap_same_type_same_source_longer_one)**
+        + Different source
+            + Keep the longer one **(Part_overlap_same_type_diff_source_longer_one)**
+    + Different system type
+            + keep them both. **(Part_overlap_diff_type_diff_source_keep_both)**. ?
+
+3. Included
+    + Same system type
+        + Same source
+            + Keep the longer one **(Included_same_type_same_source_longer_one)** ?
+        + Different source
+            + Keep the longer one **(Included_same_type_diff_source_longer_one)**
+    + Different system type
+        + Same source
+            + Keep the longer one **(Included_diff_type_same_source_longer_one)** ?
+        + Different source
+            + Keep the longer one **(Included_diff_type_diff_source_longer_one)** ?
+4. Some other filter
+    + Delete all CRISPRCas systems
+    + Delete all records in strange plasmids, such as the plasmid which is too big
+    + Delete some other strange record.
+
+
+
+
+***Make the three profile into one sheet, and merge the meta data.***
 
 ```{r setup,include=FALSE,warning = FALSE,message=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -1182,6 +1235,168 @@ for (i in 1:122) {
 ### Fin.
 
 ------------------
+
+
+```{r,warning = FALSE,message=FALSE}
+# import data.
+combined_origin_data <- read.table("../Results/2.Combined_Data/Process_file/combine_padloc_defensefinder_original2.txt", header = T, sep = "\t")
+# delete the cctyper output.
+combined_without_cas <- combined_origin_data %>% filter(combined_origin_data$Defense_System_Type != "CAS")
+combined_without_cas2 <- combined_without_cas %>% group_by(combined_without_cas$Plasmid_ID) %>% mutate(count=n()) %>% filter(count>1) %>% select(-count) %>% as.data.frame()
+combined_without_cas2$Count_Number <- c(1:length(combined_without_cas2$Plasmid_ID))
+combined_without_cas2$tag <- c(1:length(combined_without_cas2$Plasmid_ID))
+combined_without_cas2$lengthcount <- "None"
+combined_without_cas2$Plasmid_ID <- as.factor(combined_without_cas2$Plasmid_ID)
+combined_without_cas3 <- combined_without_cas2
+
+# find the overlap of each plasmid site, and delete the small one.
+all_dataframe <- list()
+
+for (i in 1:(length(levels(combined_without_cas2$Plasmid_ID)))) {
+    Loop_var1 <- levels(droplevels(combined_without_cas2$Plasmid_ID))[i]
+    selected_dataframe <- combined_without_cas2 %>% filter(combined_without_cas2$Plasmid_ID == Loop_var1) # select same plasmid
+    datalength <- length(selected_dataframe$Count_Number)
+    for (j in 1:(datalength-1)) {
+      Loop_beg1 <- selected_dataframe$System_Beg[j]
+      Loop_end1 <- selected_dataframe$System_End[j]
+      System1 <- selected_dataframe$Defense_System_Type[j]
+      up_dataframe_number <- selected_dataframe$Count_Number[j]
+      for (k in (j+1):datalength) {
+        Loop_beg2 <- selected_dataframe$System_Beg[k]
+        Loop_end2 <- selected_dataframe$System_End[k]
+        System2 <- selected_dataframe$Defense_System_Type[k]
+        down_dataframe_number <- selected_dataframe$Count_Number[k]
+        if (Loop_beg1 <= Loop_beg2 && Loop_end1 >= Loop_end2) { # included.
+          combined_without_cas3$tag[down_dataframe_number] <- "include_shorter"
+          combined_without_cas3$tag[up_dataframe_number] <- "include_longer"
+          combined_without_cas3$lengthcount[up_dataframe_number] <- (Loop_end1 - Loop_beg1) - (Loop_end2 - Loop_beg2)
+          combined_without_cas3$lengthcount[down_dataframe_number] <- (Loop_end1 - Loop_beg1) - (Loop_end2 - Loop_beg2)
+        } else if (Loop_beg1 >= Loop_beg2 && Loop_end1 <= Loop_end2) {
+          combined_without_cas3$tag[up_dataframe_number] <- "include_shorter"
+          combined_without_cas3$tag[down_dataframe_number] <- "include_longer"
+          combined_without_cas3$lengthcount[up_dataframe_number] <- (Loop_end2 - Loop_beg2) - (Loop_end1 - Loop_beg1)
+          combined_without_cas3$lengthcount[down_dataframe_number] <- (Loop_end2 - Loop_beg2) - (Loop_end1 - Loop_beg1)
+        } else if (Loop_beg1 <= Loop_beg2 && Loop_end1 <= Loop_end2 && Loop_beg2 <= Loop_end1) { # part overlap.
+          if (System1 == System2) { 
+            seq_length1 <- Loop_end1 - Loop_beg1
+            seq_length2 <- Loop_end2 - Loop_beg2
+            combined_without_cas3$lengthcount[up_dataframe_number] <- Loop_end1 - Loop_beg2
+            combined_without_cas3$lengthcount[down_dataframe_number] <- Loop_end1 - Loop_beg2
+            if (seq_length1 <= seq_length2) {
+              combined_without_cas3$tag[up_dataframe_number] <- "part_overlap_same_shorter"
+              combined_without_cas3$tag[down_dataframe_number] <- "part_overlap_same_longer"
+              combined_without_cas
+            } else if (seq_length1 > seq_length2) {
+              combined_without_cas3$tag[down_dataframe_number] <- "part_overlap_same_shorter"
+              combined_without_cas3$tag[up_dataframe_number] <- "part_overlap_same_longer"
+            }
+          } else if (System1 != System2) {
+            combined_without_cas3$lengthcount[up_dataframe_number] <- Loop_end1 - Loop_beg2
+            combined_without_cas3$lengthcount[down_dataframe_number] <- Loop_end1 - Loop_beg2
+            combined_without_cas3$tag[up_dataframe_number] <- "part_overlap_diff_both"
+            combined_without_cas3$tag[down_dataframe_number] <- "part_overlap_diff_both"
+          }
+        } else if (Loop_beg2 <= Loop_beg1 && Loop_end2 <= Loop_end1 && Loop_beg1 <= Loop_end2){
+          if (System1 == System2) {
+            seq_length1 <- Loop_end1 - Loop_beg1
+            seq_length2 <- Loop_end2 - Loop_beg2
+            combined_without_cas3$lengthcount[up_dataframe_number] <- Loop_end1 - Loop_beg2
+            combined_without_cas3$lengthcount[down_dataframe_number] <- Loop_end1 - Loop_beg2
+            if (seq_length1 <= seq_length2) {
+              combined_without_cas3$tag[up_dataframe_number] <- "part_overlap_same_shorter"
+              combined_without_cas3$tag[down_dataframe_number] <- "part_overlap_same_longer"
+            } else if (seq_length1 > seq_length2) {
+              combined_without_cas3$tag[down_dataframe_number] <- "part_overlap_same_shorter"
+              combined_without_cas3$tag[up_dataframe_number] <- "part_overlap_same_longer"
+            }
+          } else if (System1 != System2) {
+            combined_without_cas3$lengthcount[up_dataframe_number] <- Loop_end1 - Loop_beg2
+            combined_without_cas3$lengthcount[down_dataframe_number] <- Loop_end1 - Loop_beg2
+            combined_without_cas3$tag[up_dataframe_number] <- "part_overlap_diff_both"
+            combined_without_cas3$tag[down_dataframe_number] <- "part_overlap_diff_both"
+          }
+        } else if (Loop_end1 <= Loop_beg2) { # no overlap.
+          combined_without_cas3$lengthcount[up_dataframe_number] <- Loop_beg2 - Loop_end1
+          combined_without_cas3$lengthcount[down_dataframe_number] <- Loop_beg2 - Loop_end1
+          if (System1 == System2) {
+            combined_without_cas3$tag[up_dataframe_number] <- "no_overlap_same"
+            combined_without_cas3$tag[down_dataframe_number] <- "no_overlap_same"
+          } else if (System1 != System2) {
+            combined_without_cas3$tag[up_dataframe_number] <- "no_overlap_diff"
+            combined_without_cas3$tag[down_dataframe_number] <- "no_overlap_diff"
+          }
+        } else if (Loop_end2 <= Loop_beg1) {
+          combined_without_cas3$lengthcount[up_dataframe_number] <- Loop_beg1 - Loop_end2
+          combined_without_cas3$lengthcount[down_dataframe_number] <- Loop_beg1 - Loop_end2
+          if (System1 == System2) {
+            combined_without_cas3$tag[up_dataframe_number] <- "no_overlap_same"
+            combined_without_cas3$tag[down_dataframe_number] <- "no_overlap_same"
+          } else if (System1 != System2) {
+            combined_without_cas3$tag[up_dataframe_number] <- "no_overlap_diff"
+            combined_without_cas3$tag[down_dataframe_number] <- "no_overlap_diff"
+          }
+        }
+      }
+    }
+}
+
+metadata <- read.delim("../Results/1.Original_Data/plsdb_filtered.tsv", header = T) %>% dplyr::rename(Plasmid_ID=ACC_NUCCORE)
+
+combined_without_cas4 <- left_join(combined_without_cas3, metadata[,c(1,2,13)])
+
+if(do.write){
+  write.table(combined_without_cas3, file = "../Results/2.Combined_Data/Process_file/combine_padloc_defensefinder_result.txt", row.names = F, sep = "\t")
+  write.table(combined_without_cas4, file = "../Results/2.Combined_Data/Process_file/combine_padloc_defensefinder_result2.txt", row.names = F, sep = "\t")
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### be careful about the defensefinder proteins number, there maybe diff at the begin and the end, so it could be not "-".
+
+### Join the cctyper output.
+```{r,warning = FALSE,message=FALSE}
+cctyper_combined <- read.table("../Results/2.Combined_Data/Process_file/3.cctyper_data/cctyper_combined.txt",header = T,check.names = F)
+padloc_defensefinder_combined <- read.table("../Results/2.Combined_Data/Process_file/combine_padloc_defensefinder_result.txt",header = T,check.names = F)
+cctyper_combined2 <- cctyper_combined[,-2]
+padloc_defensefinder_combined2 <- padloc_defensefinder_combined %>% filter(padloc_defensefinder_combined$tag != c("part_overlap_same_shorter","include_shorter"))
+padloc_defensefinder_combined3 <- padloc_defensefinder_combined2[,-c(10,11,12,13,14)]
+output_combined_data <- rbind(cctyper_combined2,padloc_defensefinder_combined3)
+
+metadata_plsdb <- read.delim("../Results/1.Original_Data/plsdb_metadata.txt",header = T,sep = "\t")
+
+final_combined_data <- left_join(output_combined_data,metadata_plsdb)
+
+if(do.write){
+  write.table(final_combined_data, file = "../Results/2.Combined_Data/final_combined2.txt", row.names = F, sep = "\t")
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 <!-- #### Get the threshould. -->
 <!-- ##### Select the same type from the same source. -->
