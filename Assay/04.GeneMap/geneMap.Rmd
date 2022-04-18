@@ -42,94 +42,49 @@ color10 <- c('#8DD3C7', '#FFFFB3', '#BEBADA', '#FB8072', '#80B1D3', '#FDB462', '
 
 ### import data.
 ```{r}
-argonaute_origin <- read.table("../Results/1.Original_Data/argonaute_origin_data.txt",header = T, check.names = F, sep = "\t")
-combined_data2 <- read.table("../Results/3.Preliminary_Analysis/all_combined_data.txt", header = T, check.names = F, sep = "\t")
+argonaute_origin <- read.table("../../Results/00.Original_Data/10.argonaute_data/argonaute_origin_data.txt",header = T, check.names = F, sep = "\t")
+combined_data2 <- read.table("../../Results/00.Original_Data/all_combined_data.txt", header = T, check.names = F, sep = "\t")
+argonaute_gggene <- read.table("../../Results/00.Original_Data/10.argonaute_data/argoplot.txt",header = T,check.names = F,sep = "\t")
+
+arg_test <- read.table("../../Results/00.Original_Data/10.argonaute_data/argoplot_test.txt",header = T,check.names = F,sep = "\t")
+exa_test <- read.table("../../Results/00.Original_Data/10.argonaute_data/example_test.txt",header = T,check.names = F,sep = "\t")
 ```
 
-
-#### ggGenes with argonaute.
+### Select argonaute data(also including the selected data.)
 ```{r}
-example_genes2 <- rbind(example_genes,example_genes)
-write.table(example_genes2, "../Results/3.Preliminary_Analysis/argoplot_test.txt", sep = "\t", row.names = F)
+dummies_ar <- make_alignment_dummies(
+  argonaute_gggene[c(264:311),],
+  aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, id = Defense_System),
+  on = "argonaute"
+)
 
-example_genes2 <- read.table("../Results/3.Preliminary_Analysis/argoplot_test.txt", header = T, check.names = F)
-ggplot(example_genes, aes(xmin = start, xmax = end, y = molecule, fill = gene)) +
+ggplot(argonaute_gggene[c(264:311),], aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System)) +
   geom_gene_arrow() +
-  facet_grid(~ molecule, scales = "free") +
-  scale_fill_brewer(palette = "Set3")
-
-
- ggplot2::ggplot(example_genes2, ggplot2::aes(xmin = start, xmax = end,
-                                                y = molecule)) +
-    geom_gene_arrow() +
-    geom_subgene_arrow(data = example_subgenes,
-          ggplot2::aes(xmin = start, xmax = end, xsubmin = from, xsubmax = to,
-                       y = molecule, fill = gene)) +
-    ggplot2::facet_wrap(~ molecule, scales = "free")
-
- 
- 
- 
-ggplot(example_genes, aes(xmin = start, xmax = end, y = molecule, fill = gene)) +
-  geom_gene_arrow() +
-  facet_wrap(~ molecule, scales = "free", ncol = 1) +
-  scale_fill_brewer(palette = "Set3")
-```
-
-
-
-```{r}
-ar_data1 <- combined_data2[,-7] %>% filter(combined_data2$Plasmid_ID %in% argonaute_origin$Plasmid_ID)
-ar_data2 <- ar_data1 %>% filter(ar_data1$Defense_System_Type != "ARGONAUTE")
-ar_data3 <- rbind(ar_data2,argonaute_origin) %>% unique()
-
-
-argo_plot1 <- ar_data3[,c(1,3,4,5)]
-# argo_plot1 <- argonaute_origin[,c(1,3,4,5)]
-argo_plot1$System_Beg <- as.numeric(argo_plot1$System_Beg)
-argo_plot1$System_End <- as.numeric(argo_plot1$System_End)
-
-argo_plot2 <- argo_plot1[order(argo_plot1$System_Beg),]
-argo_plot3 <- argo_plot2[order(argo_plot2$Plasmid_ID),]
-
-# argo_plot2 <- argo_plot1 %>% filter(argo_plot1$Plasmid_ID == "AP018320.1")
-write.table(argo_plot3, "../Results/3.Preliminary_Analysis/argoplot.txt", sep = "\t", row.names = F)
-
-argo_plot4 <- read.table("../Results/3.Preliminary_Analysis/argoplot.txt", header = T, check.names = F)
-argo_plot4$System_Beg <- as.numeric(argo_plot4$System_Beg)
-argo_plot4$System_End <- as.numeric(argo_plot4$System_End)
-
-ggplot(argo_plot4[c(61:87),], aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Sub)) +
-  geom_gene_arrow() + 
-  facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) + 
-  scale_fill_brewer(palette = "Set3")
-
+  geom_blank(data = dummies_ar) +
+  facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) +
+  scale_fill_brewer(palette = "Set3") +
+  theme_genes()
 
 if(do.write){
-  ggsave(width=10,height=8,filename="../Results/3.Preliminary_Analysis/test.pdf",limitsize = FALSE)
+  ggsave(width=20,height=8,filename="../../Results/04.GeneMap/Argonaute_6.pdf",limitsize = FALSE)
+}
 ```
 
-
-
-
-#### Test the genemap data.
 ```{r}
-ggplot2::ggplot(example_genes, ggplot2::aes(xmin = start, xmax = end, y = molecule, fill = gene)) +
-  geom_gene_arrow() +
-  ggplot2::facet_wrap(~ molecule, scales = "free", ncol = 1) +
-  ggplot2::scale_fill_brewer(palette = "Set3")
+dummies <- make_alignment_dummies(
+  exa_test,
+  aes(xmin = start, xmax = end, y = molecule, id = gene),
+  on = "genE"
+)
 
-
-ggplot2::ggplot(example_genes, ggplot2::aes(xmin = start, xmax = end, y = molecule, fill = gene)) +
+ggplot(exa_test, aes(xmin = start, xmax = end, y = molecule, fill = gene)) +
   geom_gene_arrow() +
-  ggplot2::facet_wrap(~ molecule, scales = "free", ncol = 1) +
-  ggplot2::scale_fill_brewer(palette = "Set3") +
+  geom_blank(data = dummies) +
+  facet_wrap(~ molecule, scales = "free", ncol = 1) +
+  scale_fill_brewer(palette = "Set3") +
   theme_genes()
+
 ```
-
-
-
-
 
 
 
