@@ -36,6 +36,7 @@ library(psych)
 library(vegan)
 library(tidyverse)
 library(knitr)
+library(mixtools)
 do.write <- F
 options(scipen = 200)
 color_my10 <- c("#EBEBF3","#F4EEEE","#0B89CF","#A7647A","#B4A9BC","#90A3BD","#39639B","#DF9599","#AACFDD","#D8757B")
@@ -62,6 +63,8 @@ combined_data2 <- combined_data %>% filter(combined_data$Plasmid_ID != "NZ_CP069
 argonaute_origin <- read.table("../../Results/00.Original_Data/10.argonaute_data/argonaute_origin_data.txt",header = T, check.names = F, sep = "\t")
 argonaute_selected <- read.table("../../Results/00.Original_Data/10.argonaute_data/argonaute_selected_file.txt", header = T, check.names = F, sep = "\t")
 combined_data2 <- read.table("../../Results/00.Original_Data/all_combined_data.txt", header = T, check.names = F, sep = "\t")
+
+origin_metadata <- read_tsv("../../Results/00.Original_Data/00.meta_data/plsdb_filtered.tsv")
 ```
 
 ### Find the distribution of the denfence system in plasmids genome.
@@ -490,16 +493,64 @@ plasmid_dis11$Plasmid_Size <- ordered(as.factor(mixedsort(as.numeric(order_list)
 plasmid_dis11$Plasmid_Size <- factor(plasmid_dis11$Plasmid_Size,levels = ordered(as.factor(mixedsort(as.numeric(order_list)))))
 
 # The relation between the plasmid size and the how many numbers of plasmids in this.
-ggplot(plasmid_dis11,aes(x=TAG,y=Number_of_plasmid)) + 
-  geom_col(fill="steelblue",stat = 'identity',width = 0.8) + 
-  geom_text(aes(label=Number_of_plasmid),vjust = -0.2, hjust = 0.5,position = position_dodge2(width = 0.1, preserve = 'single')) + 
-  labs(x="Plasmids Size (Kb)", y="Nb plasmid genomes") + 
+# ggplot(plasmid_dis11,aes(x=TAG,y=Number_of_plasmid)) + 
+#   geom_col(fill="steelblue",stat = 'identity',width = 0.8) + 
+#   geom_text(aes(label=Number_of_plasmid),vjust = -0.2, hjust = 0.5,position = position_dodge2(width = 0.1, preserve = 'single')) + 
+#   labs(x="Plasmids Size (Kb)", y="Nb plasmid genomes") + 
+#   theme_bw() + 
+#   theme(plot.title = element_text(size = 20, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+#         axis.title.x = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+#         axis.title.y = element_text(size = 15, face = "bold", angle = 90, vjust = 0.5, hjust = 0.5),
+#         axis.text.x = element_text(size = 10, face = "bold", angle = 45, vjust = 1, hjust = 1),
+#         axis.text.y = element_text(size = 10, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+#         legend.title = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0),
+#         legend.text = element_text(size = 12, face = "plain", angle = 0, vjust = 0.5, hjust = 0),
+#         legend.key = element_rect(fill = 'transparent'),
+#         legend.position = 'bottom',
+#         legend.key.size=unit(0.8,'cm'),
+#         legend.key.width=unit(1.2,'cm'),
+#         legend.spacing.y = unit(0.5,"cm"),
+#         # plot.margin = unit(c(1, 1, 1, 1),'cm'),
+#         strip.text.y = element_text(size=15,face = "bold"),
+#         strip.text.x = element_text(size=15,face = "bold")
+#         )
+
+#---------------
+# all_median <- median(origin_metadata$Length_NUCCORE)
+k <- normalmixEM2comp(log10(origin_metadata$Length_NUCCORE), sigsqrd = c(1,2), mu = c(3,5), lambda = 0.5)
+parak <- 10^k$mu
+
+line2.df <- data.frame(Group = c("all plasmids"),
+                      LengthS = paste(round(c(parak[1],parak[2])/1000),"kbp"),
+                      Length = c(parak[1],parak[2]),
+                      Place = c(1,1))
+
+#-------------
+```
+
+```{r}
+# combined_data3 <- combined_data2 %>% filter(combined_data2$Defense_System_Type == "ARGONAUTE")
+combined_data3 <- combined_data2
+combined_data4 <- combined_data3[,c(1,11)] %>% unique()
+
+# diff_data <- setdiff(origin_metadata$ACC_NUCCORE,combined_data4$Plasmid_ID)
+# combined_data5 <- origin_metadata %>% filter(origin_metadata$ACC_NUCCORE %in% diff_data)
+# combined_data6 <- combined_data5[,c(1,13)] %>% unique()
+
+xx_median <- median(combined_data4$Length)
+k <- normalmixEM2comp(log10(combined_data4$Length), sigsqrd = c(1,2), mu = c(3,5), lambda = 0.5)
+parak <- 10^k$mu
+
+ggplot(combined_data4,aes(x=Length)) + 
+  geom_density() +
+  labs(x="Plasmids Size (Kb)", y="Density") + 
   theme_bw() + 
+  scale_x_log10(labels = COEF::fancy_scientific) + 
   theme(plot.title = element_text(size = 20, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
-        axis.title.x = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.title.x = element_blank(),
         axis.title.y = element_text(size = 15, face = "bold", angle = 90, vjust = 0.5, hjust = 0.5),
-        axis.text.x = element_text(size = 10, face = "bold", angle = 45, vjust = 1, hjust = 1),
-        axis.text.y = element_text(size = 10, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.text.x = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.text.y = element_text(size = 13, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
         legend.title = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0),
         legend.text = element_text(size = 12, face = "plain", angle = 0, vjust = 0.5, hjust = 0),
         legend.key = element_rect(fill = 'transparent'),
@@ -510,9 +561,10 @@ ggplot(plasmid_dis11,aes(x=TAG,y=Number_of_plasmid)) +
         # plot.margin = unit(c(1, 1, 1, 1),'cm'),
         strip.text.y = element_text(size=15,face = "bold"),
         strip.text.x = element_text(size=15,face = "bold")
-        )
+)
+
 if(do.write){
-  ggsave(width=12,height=6,filename="../Results/3.Preliminary_Analysis/plasmidsize_plasmidnumbers.pdf",limitsize = FALSE)
+  ggsave(width=10,height=6,filename="../../Results/01.Distribution/plasmidsize_defense.pdf",limitsize = FALSE)
 }
 ```
 

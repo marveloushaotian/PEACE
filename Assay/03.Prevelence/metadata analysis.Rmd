@@ -30,6 +30,7 @@ library(psych)
 library(vegan)
 library(tidyverse)
 library(knitr)
+library(stringr)
 do.write <- F
 options(scipen = 200)
 color_my10 <- c("#EBEBF3","#F4EEEE","#0B89CF","#A7647A","#B4A9BC","#90A3BD","#39639B","#DF9599","#AACFDD","#D8757B")
@@ -42,14 +43,53 @@ color10 <- c('#8DD3C7', '#FFFFB3', '#BEBADA', '#FB8072', '#80B1D3', '#FDB462', '
 
 ### import data.
 ```{r}
+metadata_origin <- read_tsv("../../Results/00.Original_Data/00.meta_data/plsdb_filtered.tsv")
+
 metadata <- read.delim("../../Results/00.Original_Data/00.meta_data/plsdb_metadata_mar.txt",header = T,check.names = F,sep = "\t")
 combine_data <- read.table("../../Results/00.Original_Data/all_combined_data.txt",header = T,check.names = F,sep = "\t")
 ```
 
 ### filter data.
 ```{r}
+metadata_iso_host <- metadata_origin %>% filter(metadata_origin$IsolationSource_BIOSAMPLE != "" | metadata_origin$Host_BIOSAMPLE != "")
+metadata_iso_host$TAG <- paste(metadata_iso_host$IsolationSource_BIOSAMPLE,"_",metadata_iso_host$Host_BIOSAMPLE)
+metadata_tag_order <- tapply(metadata_iso_host$TAG, metadata_iso_host$TAG, length) %>% as.data.frame() %>% rownames_to_column("TAG")
+metadata_tag_order <- metadata_tag_order %>% dplyr::rename(Tag_count = ".")
+metadata_tag_order2 <- metadata_tag_order %>% filter(metadata_tag_order$Tag_count > 9)
+metadata_tag_order3 <- metadata_tag_order %>% filter(metadata_tag_order$Tag_count <= 9)
 
+# metadata_pfamily <- metadata_origin %>% filter(metadata_origin$pmlst != "")
+# metadata_pf <- str_split_fixed(metadata_pfamily$pmlst, " ", 2) %>% as.data.frame()
+# metadata_pf_order <- tapply(metadata_pf$V1, metadata_pf$V1, length) %>% as.data.frame() %>% rownames_to_column("plasmidfinder")
+# metadata_pf_order <- metadata_pf_order %>% dplyr::rename(Tag_count = ".")
+
+library(mixtools)
+f <- normalmixEM2comp(log10(metadata_tag_order$Tag_count), sigsqrd = c(1,2), mu = c(3,5), lambda = 0.5)
+param <- 10^m$mu
+
+ggplot(metadata_tag_order, aes(Tag_count)) +
+    theme_bw() +
+    geom_density() +
+    # geom_vline(data = line_df, aes(xintercept = Length)) +
+    # geom_text(data = line_df, aes(label = LengthS, y = Place, x = Length), hjust = -0.2, size = 3) +
+    scale_x_log10(labels = COEF::fancy_scientific) +
+    xlab("Count Number") +
+    ylab("Density")
+
+
+
+
+write.table(metadata_tag_order2, "../../Results/00.Original_Data/00.meta_data/plsdb_filtered_tag.txt", sep = "\t", row.names = F)
 ```
+
+
+```{r}
+# densiyu_qu <- read.delim("../../Results/00.Original_Data/00.meta_data/plsdb_filtered_tag.txt",header = T,sep = "\t")
+# densiyu_qu$Tag_count <- as.character(densiyu_qu$Tag_count)
+# ggplot(densiyu_qu,aes(TAG,Tag_density))+geom_point()+geom_smooth(method="loess")
+```
+
+
 
 ### pheatmap.
 #### host-subtype.
