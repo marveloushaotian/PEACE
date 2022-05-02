@@ -30,13 +30,14 @@ library(psych)
 library(vegan)
 library(tidyverse)
 library(knitr)
+library(gggenomes)
 do.write <- F
 options(scipen = 200)
 color_my10 <- c("#EBEBF3","#F4EEEE","#0B89CF","#A7647A","#B4A9BC","#90A3BD","#39639B","#DF9599","#AACFDD","#D8757B")
 color_my41 <- c("#e63946","#457b9d","#a8dadc","#f4a261","#e76f51","#ff6b6b","#e5989b","#4ecdc4","#9bc1bc","#3d5a80","#cbf3f0","#d3bcc0","#bfc0c0","#b2967d","#9db4c0","#74546a","#84a59d","#bee3db","#f28482","#89b0ae","#4ecdc4","#fe5f55","#68d8d6","#ffd5c2","#77bfa3","#b8d8d8","#f694c1","#f7b267","#58a4b0","#f2cc8f","#a5668b","#f5cb5c","#06aed5","#ed6a5a","#5ca4a9","#ff715b","#59c3c3","#f4a261","#e63946","#fcb9b2","#8ac6d0")
-color_heatmap_bule_red <- c("#7E1712","#bd2113","#e3460c","#f07701","#f59525","#fccbb8","#f5e13a","#a3e2e1","#6ab7e1","#4f74bb","#472497")  # top_soil:深红1，深红2，橙色1，橙色2，中黄，肉色，柠檬黄，浅蓝2，浅蓝1，深蓝2，深蓝1
-color_4 <- c("#03a94d","#3846a2","#03b4c5","#eb2c3a") #绿色，深蓝，浅蓝，红色
-color_2 <- c("#04adef","#f15b2b") #天蓝，橙色
+color_heatmap_bule_red <- c("#7E1712","#bd2113","#e3460c","#f07701","#f59525","#fccbb8","#f5e13a","#a3e2e1","#6ab7e1","#4f74bb","#472497")
+color_4 <- c("#03a94d","#3846a2","#03b4c5","#eb2c3a")
+color_2 <- c("#04adef","#f15b2b")
 color10 <- c('#8DD3C7', '#FFFFB3', '#BEBADA', '#FB8072', '#80B1D3', '#FDB462', '#B3DE69', '#FCCDE5', '#BC80BD', '#CCEBC5', 'gray')
 ```
 
@@ -69,21 +70,26 @@ if(do.write){
   ggsave(width=20,height=8,filename="../../Results/04.GeneMap/Argonaute_6.pdf",limitsize = FALSE)
 }
 ```
-
 ```{r}
-dummies <- make_alignment_dummies(
-  exa_test,
-  aes(xmin = start, xmax = end, y = molecule, id = gene),
-  on = "genE"
-)
+data(package="gggenomes")
 
-ggplot(exa_test, aes(xmin = start, xmax = end, y = molecule, fill = gene)) +
-  geom_gene_arrow() +
-  geom_blank(data = dummies) +
-  facet_wrap(~ molecule, scales = "free", ncol = 1) +
-  scale_fill_brewer(palette = "Set3") +
-  theme_genes()
-
+gggenomes(argonaute_gggene, emale_seqs, emale_tirs, emale_ava) %>%
+  add_feats(ngaros=emale_ngaros, gc=emale_gc) %>%
+  add_sublinks(emale_prot_ava) %>%
+  flip_by_links() +
+  geom_feat(position="identity", size=6) +
+  geom_seq() +
+  geom_link(data=links(2)) +
+  geom_bin_label() +
+  geom_gene(aes(fill=name)) +
+  geom_gene_tag(aes(label=name), nudge_y=0.1, check_overlap = TRUE) +
+  geom_feat(data=feats(ngaros), alpha=.3, size=10, position="identity") +
+  geom_feat_note(aes(label="Ngaro-transposon"), feats(ngaros),
+      nudge_y=.1, vjust=0) +
+  geom_ribbon(aes(x=(x+xend)/2, ymax=y+.24, ymin=y+.38-(.4*score),
+      group=seq_id, linetype="GC-content"), feats(gc),
+      fill="lavenderblush4", position=position_nudge(y=-.1)) +
+  scale_fill_brewer("Genes", palette="Dark2", na.value="cornsilk3")
 ```
 
 
