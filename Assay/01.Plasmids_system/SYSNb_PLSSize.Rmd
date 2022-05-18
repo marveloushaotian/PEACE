@@ -1,0 +1,443 @@
+---
+title: "System number - Plasmid size"
+author: "[Haotian Zheng](https://github.com/marveloushaotian)"
+date: "`r Sys.Date()`"
+output: html_document
+---
+**This document analysis:**  
+*1.If the plamids size getting larger, how is the defense systems number going?*  
+*2.What is the density of each defense system in the plasmids genome?*  
+
+***
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figs/',
+                      echo=FALSE, warning=FALSE, message=FALSE) # Need to change the path of the plot.
+
+library(knitr) # evaluate the code, putting the results in a markdown document, which can then be converted to a variety of formats with pandoc.
+library(tidyverse) # including ggplot2,dplyr,tidyr,readr,purrr,tibble,stringr,forcats.
+# Matrix processing
+library(reshape2) # 'melt', 'cast' rebuild database.
+library(plyr)
+library(data.table)
+
+# Statistic.
+library(scales) # generic function whose default method centers and/or scales the columns of a numeric matrix.
+library(psych)
+library(vegan)
+library(randomForest)
+library(caret)
+
+# Visualization.
+library(igraph)
+library(ggrepel) # repel overlapping text labels.
+library(ggthemes) # contains extra themes, scales, and geoms, and functions for and related to ggplot2.
+library(ggpubr) # facilitates the creation of beautiful ggplot2-based graphs.
+library(gg.gap) # Easy to define segments in y-axis for 'ggplot2'.
+library(ggbreak) # Effectively Utilize Plotting Space to Deal With Large Datasets and Outliers.
+library(RColorBrewer)
+library(pheatmap) # A function to draw clustered heatmaps.
+library(gggenes) # provides a 'ggplot2' geom and helper functions for draw- ing gene arrow maps.
+library(gggenomes)
+
+do.write <- F
+options(scipen = 200)
+```
+
+#### Import data.
+```{r}
+
+```
+
+***
+
+#### Filter data.
+```{r}
+
+```
+
+***
+
+#### Visualization.
+```{r}
+
+```
+
+### The distribution of the defense system and plasmids genome with genome size.
+### Plasmid Size - Plasmids number/Defence system number.
+*how many plasmid have the same plasmid size range.*
+*how many system have the same plasmid size range.*
+*make the scales more details.*
+
+### The composition of plasmids in bacteria env using own defensesystem database.
+```{r}
+Get_composition <- combined_data2[,-c(2:12)] %>% filter(combined_data2$phylum != "")
+write.table(Get_composition,"../Results/3.Preliminary_Analysis/plasmid_composition.txt",row.names = F,sep = "\t")
+
+Get_composition <- unique(Get_composition)
+# Get_composition$phylum <- as.factor(Get_composition$phylum)
+Get_composition$CountTag <- 1
+Phylum_count_own <- aggregate(Get_composition$CountTag, by = list(as.factor(Get_composition$phylum)), sum)
+Phylum_count_own2 <- Phylum_count_own %>% dplyr::rename(Bacteria = Group.1, Number = x)
+Phylum_count_own3 <- Phylum_count_own2 %>% filter(Phylum_count_own2$Number > 2)
+Phylum_count_own3_2 <- Phylum_count_own2 %>% filter(Phylum_count_own2$Number <= 2)
+Phylum_count_own3$Bacteria <- as.character(Phylum_count_own3$Bacteria)
+Phylum_count_own4 <- rbind(Phylum_count_own3,c("Others",sum(Phylum_count_own3_2$Number)))
+Phylum_count_own4$Number <- as.numeric(Phylum_count_own4$Number)
+Phylum_count_own4$percent <- percent(Phylum_count_own4$Number/sum(Phylum_count_own4$Number))
+Phylum_count_own5 <- Phylum_count_own4 %>% filter(Phylum_count_own4$Bacteria != "Others")
+
+Phylum_count_own5 <- Phylum_count_own5[order(Phylum_count_own5$Number,decreasing = T),]
+Phylum_count_own5$Bacteria <- factor(Phylum_count_own5$Bacteria, levels = unique(Phylum_count_own5$Bacteria))
+Phylum_count_own6 <- rbind(Phylum_count_own5,Phylum_count_own4[10,])
+
+ggplot(Phylum_count_own6, aes(x=" ", y=Number, fill=Bacteria)) + 
+  geom_bar(width = 1, stat = "identity") + 
+  coord_polar("y", start=0) + 
+  scale_fill_manual(values=c(color10)) + 
+  # theme_bw() + 
+  # geom_text(aes(x=1,label=as.character(Phylum_count_own6$percent)),
+            # position = position_stack(reverse =F,vjust=0.5),size=6) + 
+  theme(plot.title = element_text(size = 12, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 12, face = "plain", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.ticks = element_blank(),
+        legend.title = element_text(size = 12, face = "bold", angle = 0, vjust = 0.5, hjust = 0),
+        legend.text = element_text(size = 12, face = "plain", angle = 0, vjust = 0.5, hjust = 0),
+        legend.key = element_rect(fill = 'transparent'),
+        panel.background = element_rect(I(0)),
+        legend.position = 'right',
+        legend.key.size=unit(0.8,'cm'),
+        legend.key.width=unit(0.8,'cm'),
+        legend.spacing.y = unit(0.3,"cm"),
+        # plot.margin = unit(c(1, 1, 1, 1),'cm'),
+        strip.text.y = element_text(size=15,face = "bold"),
+        strip.text.x = element_text(size=15,face = "bold")
+        )
+
+if(do.write){
+  ggsave(width=8,height=6,filename="../Results/3.Preliminary_Analysis/Plasmid_composition.pdf",limitsize = FALSE)
+}
+
+```
+
+# The plasmid size and the plasmids number and defence systems number.
+*a key question is need to divide all the records into different size.(plasmid size, so the tag should be done at the level of metadata.)*
+*Distribution of the genome size.*
+```{r}
+plasmid_dis <- tapply(combined_data2$Plasmid_ID, combined_data2$Plasmid_ID, length) %>% as.data.frame() %>% rownames_to_column("Plasmid_ID") # Count each plasmid have how many defense systems.
+plasmid_dis2 <- plasmid_dis %>% dplyr::rename(system_count = ".")
+plasmid_dis5 <- left_join(plasmid_dis2,metadata_plsdb[,c(1,3)]) # Add the plasmids length.
+
+group_number <- ceiling(max(plasmid_dis5$Length)/50000) # 50kb as a group.
+plasmid_dis5$Lengthtag <- c(1:length(plasmid_dis5$Plasmid_ID))
+
+plasmid_dis6 <- list()
+for (i in 1:group_number) {
+  try({
+    plasmid_dis6[[i]] <- plasmid_dis5 %>% filter(plasmid_dis5$Length >= ((i-1)*50000) & plasmid_dis5$Length < i*50000)
+    plasmid_dis6[[i]]$Lengthtag <- i*50
+    plasmid_dis6[[i]]$Lengthtagger <- paste0(i*50,"kb")
+  })
+}
+
+plasmid_dis7 <- data.frame()
+for (j in 1:(length(plasmid_dis6))) {
+  if (j == 1) {
+    plasmid_dis7 <- plasmid_dis6[[1]]
+  } else if (j != 1) {
+    plasmid_dis7 <- rbind(plasmid_dis7,plasmid_dis6[[j]])
+  }
+}
+
+
+plasmid_dis7$Lengthtag <- as.factor(plasmid_dis7$Lengthtag)
+plasmid_mean <- aggregate(plasmid_dis7$Length, by = list(plasmid_dis7$Lengthtag), mean)
+plasmid_mean2 <- plasmid_mean %>% dplyr::rename(Plasmid_Size = Group.1, Length_of_genomes = x)
+plasmid_dis8 <- tapply(plasmid_dis7$Lengthtag, plasmid_dis7$Lengthtag, length) %>% as.data.frame() %>% rownames_to_column("Plasmid_Size")
+plasmid_dis9 <- plasmid_dis8 %>% dplyr::rename(plasmid_count = ".")
+plasmid_dis10 <- cbind(plasmid_mean2,plasmid_dis9$plasmid_count)
+plasmid_dis11 <- plasmid_dis10 %>% dplyr::rename(Number_of_plasmid = "plasmid_dis9$plasmid_count")
+plasmid_dis11$TAG <- plasmid_dis11$Plasmid_Size
+# plasmid_dis11$Plasmid_Size <- as.numeric(plasmid_dis11$Plasmid_Size)
+
+
+
+order_list <- plasmid_dis11$Plasmid_Size
+
+plasmid_dis11$Plasmid_Size <- ordered(as.factor(mixedsort(as.numeric(order_list))))
+plasmid_dis11$Plasmid_Size <- factor(plasmid_dis11$Plasmid_Size,levels = ordered(as.factor(mixedsort(as.numeric(order_list)))))
+
+# The relation between the plasmid size and the how many numbers of plasmids in this.
+# ggplot(plasmid_dis11,aes(x=TAG,y=Number_of_plasmid)) + 
+#   geom_col(fill="steelblue",stat = 'identity',width = 0.8) + 
+#   geom_text(aes(label=Number_of_plasmid),vjust = -0.2, hjust = 0.5,position = position_dodge2(width = 0.1, preserve = 'single')) + 
+#   labs(x="Plasmids Size (Kb)", y="Nb plasmid genomes") + 
+#   theme_bw() + 
+#   theme(plot.title = element_text(size = 20, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+#         axis.title.x = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+#         axis.title.y = element_text(size = 15, face = "bold", angle = 90, vjust = 0.5, hjust = 0.5),
+#         axis.text.x = element_text(size = 10, face = "bold", angle = 45, vjust = 1, hjust = 1),
+#         axis.text.y = element_text(size = 10, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+#         legend.title = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0),
+#         legend.text = element_text(size = 12, face = "plain", angle = 0, vjust = 0.5, hjust = 0),
+#         legend.key = element_rect(fill = 'transparent'),
+#         legend.position = 'bottom',
+#         legend.key.size=unit(0.8,'cm'),
+#         legend.key.width=unit(1.2,'cm'),
+#         legend.spacing.y = unit(0.5,"cm"),
+#         # plot.margin = unit(c(1, 1, 1, 1),'cm'),
+#         strip.text.y = element_text(size=15,face = "bold"),
+#         strip.text.x = element_text(size=15,face = "bold")
+#         )
+
+#---------------
+# all_median <- median(origin_metadata$Length_NUCCORE)
+k <- normalmixEM2comp(log10(origin_metadata$Length_NUCCORE), sigsqrd = c(1,2), mu = c(3,5), lambda = 0.5)
+parak <- 10^k$mu
+
+line2.df <- data.frame(Group = c("all plasmids"),
+                      LengthS = paste(round(c(parak[1],parak[2])/1000),"kbp"),
+                      Length = c(parak[1],parak[2]),
+                      Place = c(1,1))
+
+#-------------
+```
+
+```{r}
+# combined_data3 <- combined_data2 %>% filter(combined_data2$Defense_System_Type == "ARGONAUTE")
+combined_data3 <- combined_data2
+combined_data4 <- combined_data3[,c(1,11)] %>% unique()
+
+# diff_data <- setdiff(origin_metadata$ACC_NUCCORE,combined_data4$Plasmid_ID)
+# combined_data5 <- origin_metadata %>% filter(origin_metadata$ACC_NUCCORE %in% diff_data)
+# combined_data6 <- combined_data5[,c(1,13)] %>% unique()
+
+xx_median <- median(combined_data4$Length)
+k <- normalmixEM2comp(log10(combined_data4$Length), sigsqrd = c(1,2), mu = c(3,5), lambda = 0.5)
+parak <- 10^k$mu
+
+ggplot(combined_data4,aes(x=Length)) + 
+  geom_density() +
+  labs(x="Plasmids Size (Kb)", y="Density") + 
+  theme_bw() + 
+  scale_x_log10(labels = COEF::fancy_scientific) + 
+  theme(plot.title = element_text(size = 20, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 15, face = "bold", angle = 90, vjust = 0.5, hjust = 0.5),
+        axis.text.x = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.text.y = element_text(size = 13, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        legend.title = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0),
+        legend.text = element_text(size = 12, face = "plain", angle = 0, vjust = 0.5, hjust = 0),
+        legend.key = element_rect(fill = 'transparent'),
+        legend.position = 'bottom',
+        legend.key.size=unit(0.8,'cm'),
+        legend.key.width=unit(1.2,'cm'),
+        legend.spacing.y = unit(0.5,"cm"),
+        # plot.margin = unit(c(1, 1, 1, 1),'cm'),
+        strip.text.y = element_text(size=15,face = "bold"),
+        strip.text.x = element_text(size=15,face = "bold")
+)
+
+if(do.write){
+  ggsave(width=10,height=6,filename="../../Results/01.Distribution/plasmidsize_defense.pdf",limitsize = FALSE)
+}
+```
+
+*Average number od anti-phage system are correlated with genome size.(need to count the spearman.)*
+```{r}
+# The relation between the plasmid size and how many numbers of systems in this.
+plasmid_dis12 <- aggregate(plasmid_dis7$system_count, by=list(plasmid_dis7$Lengthtag),mean)
+plasmid_dis13 <- plasmid_dis12 %>% dplyr::rename(Plasmid_Size=Group.1,Number_of_systems=x)
+plasmid_dis13$Number_of_systems <- round(plasmid_dis13$Number_of_systems,1)
+# plasmid_dis13$tage <- plasmid_dis13$Plasmid_Size
+
+# order_list <- plasmid_dis13$Plasmid_Size
+# plasmid_dis13$Plasmid_Size <- ordered(as.factor(mixedsort(as.numeric(order_list))))
+# plasmid_dis13$Plasmid_Size <- factor(plasmid_dis13$Plasmid_Size,levels = ordered(as.factor(mixedsort(as.numeric(order_list)))))
+
+plasmid_dis13$Plasmid_Size <- as.numeric(plasmid_dis13$Plasmid_Size)
+plasmid_dis13$tage <- plasmid_dis13$Plasmid_Size*50
+
+ggplot(plasmid_dis13,aes(x=tage,y=Number_of_systems)) + 
+  geom_point(fill="steelblue",stat = 'identity',width = 0.8) + 
+  geom_smooth(method="loess") + 
+  labs(x="Plasmids Size (Kb)", y="Nb defense systems") + 
+  scale_x_continuous(breaks = seq(50,2900,100)) +
+  theme_bw() + 
+  theme(plot.title = element_text(size = 20, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.title.x = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.title.y = element_text(size = 15, face = "bold", angle = 90, vjust = 0.5, hjust = 0.5),
+        axis.text.x = element_text(size = 10, face = "bold", angle = 45, vjust = 0.5, hjust = 0.5),
+        axis.text.y = element_text(size = 10, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        legend.title = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0),
+        legend.text = element_text(size = 12, face = "plain", angle = 0, vjust = 0.5, hjust = 0),
+        legend.key = element_rect(fill = 'transparent'),
+        legend.position = 'bottom',
+        legend.key.size=unit(0.8,'cm'),
+        legend.key.width=unit(1.2,'cm'),
+        legend.spacing.y = unit(0.5,"cm"),
+        # plot.margin = unit(c(1, 1, 1, 1),'cm'),
+        strip.text.y = element_text(size=15,face = "bold"),
+        strip.text.x = element_text(size=15,face = "bold")
+        )
+if(do.write){
+  ggsave(width=6,height=6,filename="../Results/3.Preliminary_Analysis/plasmidsize_systemnumber.pdf",limitsize = FALSE)
+ }
+```
+
+
+
+### normalize size plot. rate.
+```{r}
+combine_data <- read.table("../../Results/00.Original_Data/all_combined_data.txt",header = T,check.names = F,sep = "\t")
+plsdb_ori <- read.delim2("../../Results/00.Original_Data/00.meta_data/plsdb_metadata_mar.txt", header = T, check.names = F, sep = "\t")
+
+with_systems <- combine_data[,c(1,2,11)]
+# with_systems$mintag <- floor(with_systems$Length/10000)*10
+with_systems$maxtag <- ceiling(with_systems$Length/1000)
+with_systems$mintag <- ceiling(with_systems$Length/1000) - 1#0
+with_systems$tag <- paste0(with_systems$mintag,"-",with_systems$maxtag)
+
+pre <- plsdb_ori %>% filter(plsdb_ori$Plasmid_ID %in% with_systems$Plasmid_ID)
+without_systems <- setdiff(plsdb_ori,pre)[,c(1,3)]
+without_systems$Defense_System_Type <- "None"
+# without_systems$mintag <- floor(without_systems$Length/10000)*10
+without_systems$maxtag <- ceiling(without_systems$Length/1000)
+without_systems$mintag <- ceiling(without_systems$Length/1000) - 1#0
+without_systems$tag <- paste0(without_systems$mintag,"-",without_systems$maxtag)
+
+
+with_systems_number <- tapply(with_systems$tag, with_systems$tag, length) %>% as.data.frame() %>% rownames_to_column("tag")
+with_systems_number <- with_systems_number %>% dplyr::rename(defense_number=".")
+
+with_systems_plasmids <- with_systems[,c(1,6)] %>% unique()
+with_systems_plasmids_number <- tapply(with_systems_plasmids$tag,with_systems_plasmids$tag,length) %>% as.data.frame() %>% rownames_to_column("tag")
+with_systems_plasmids_number <- with_systems_plasmids_number %>% dplyr::rename(plasmid_number=".")
+
+
+without_systems_number <- tapply(without_systems$tag, without_systems$tag, length) %>% as.data.frame() %>% rownames_to_column("tag")
+without_systems_number <- without_systems_number %>% dplyr::rename(defense_number=".")
+without_systems_number$defense_number <- 0
+
+without_systems_plasmids <- without_systems[,c(1,6)] %>% unique()
+without_systems_plasmids_number <- tapply(without_systems_plasmids$tag, without_systems_plasmids$tag, length) %>% as.data.frame() %>% rownames_to_column("tag")
+without_systems_plasmids_number <- without_systems_plasmids_number %>% dplyr::rename(plasmid_number=".")
+
+combine_system_number <- rbind(with_systems_number,without_systems_number)
+combine_system_plasmids_number <- rbind(with_systems_plasmids_number,without_systems_plasmids_number)
+
+combine_system_number2 <- aggregate(defense_number ~ tag, data = combine_system_number, sum)
+combine_system_plasmids_number2 <- aggregate(plasmid_number ~ tag, data = combine_system_plasmids_number, sum)
+
+combine_new <- cbind(combine_system_number2,combine_system_plasmids_number2)[,c(1,2,4)]
+
+combine_new$ratio <- round(combine_new$defense_number/combine_new$plasmid_number,2)
+combine_new$split <- str_split_fixed(combine_new$tag,"-",2)[,1]
+combine_new$split <- as.numeric(combine_new$split)
+
+combine_new2 <- combine_new[order(combine_new$split),]
+
+combine_new2$split <- factor(combine_new2$split,levels = unique(combine_new2$split))
+combine_new2$tag <- factor(combine_new2$tag,levels = unique(combine_new2$tag))
+
+combine_new3 <- combine_new2 %>% filter(combine_new2$ratio != 0)
+combine_new4 <- combine_new3 %>% filter(combine_new3$plasmid_number >= 10)
+
+combine_new4$split <- as.numeric(combine_new4$split)
+# combine_new4$tag <- as.character(combine_new4$tag)
+
+ggplot(combine_new4,aes(x=split,y=ratio)) +
+  # geom_bar(fill="steelblue",stat = 'identity',width = 0.8) +
+  geom_point() + geom_smooth(method="loess",se=T) +
+  geom_text(aes(label=ratio),vjust = -0.2, hjust = 0.5,position = position_dodge2(width = 0.1, preserve = 'single')) +
+  # scale_x_continuous(breaks = c(0:13)) +
+  # scale_y_break(c(2050,29500),ticklabels = c(29500,30000),scales = 0.1) +
+  labs(x="Size group(Kb)", y="ratio(system number/plasmids number)") +
+  theme_bw() +
+  theme(plot.title = element_text(size = 20, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.title.x = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.title.y = element_text(size = 15, face = "bold", angle = 90, vjust = 0.5, hjust = 0.5),
+        axis.text.x = element_text(size = 10, face = "plain", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.text.y = element_text(size = 10, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        legend.title = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0),
+        legend.text = element_text(size = 12, face = "bold", angle = 0, vjust = 0.5, hjust = 0),
+        legend.key = element_rect(fill = 'transparent'),
+        legend.position = 'bottom',
+        legend.key.size=unit(0.8,'cm'),
+        legend.key.width=unit(1.2,'cm'),
+        legend.spacing.y = unit(0.5,"cm"),
+        # plot.margin = unit(c(1, 1, 1, 1),'cm'),
+        strip.text.y = element_text(size=15,face = "bold"),
+        strip.text.x = element_text(size=15,face = "bold")
+        )
+if(do.write){
+  ggsave(width=12,height=8,filename="../../Results/01.Distribution/size_2.pdf",limitsize = FALSE)
+}
+```
+
+
+```{r}
+size_data <- read.table("../../Results/00.Original_Data/Size_group.txt",header = T,check.names = F,sep = "\t")
+size_data$Length_Group <- factor(size_data$Length_Group, levels=unique(size_data$Length_Group))
+
+
+defense_number <- size_data[,c(1,12)]
+defense_number2 <- tapply(defense_number$Length_Group, defense_number$Length_Group, length) %>% as.data.frame() %>% rownames_to_column("TAG")
+defense_number2 <- defense_number2 %>% dplyr::rename(defense_number=".")
+
+plasmids_number <- size_data[,c(1,12)] %>% unique()
+plasmids_number2 <- tapply(plasmids_number$Length_Group, plasmids_number$Length_Group, length) %>% as.data.frame() %>% rownames_to_column("TAG")
+plasmids_number2 <- plasmids_number2 %>% dplyr::rename(plasmid_number=".")
+
+new_number <- cbind(defense_number2,plasmids_number2)
+
+new_number2 <- new_number[,c(1,2,4)]
+
+# test_number <- new_number2 %>% dplyr::filter(new_number2$plasmid_number != "1")
+
+
+new_number2$ratio <- round(new_number$defense_number/new_number$plasmid_number,2)
+new_number2$TAG <- factor(new_number2$TAG, levels=unique(new_number2$TAG))
+
+ggplot(new_number2,aes(x=TAG,y=ratio)) + 
+  # geom_bar(fill="steelblue",stat = 'identity',width = 0.8) + 
+  geom_text(aes(label=ratio),vjust = -0.2, hjust = 0.5,position = position_dodge2(width = 0.1, preserve = 'single')) + 
+  # scale_x_continuous(breaks = c(0:13)) + 
+  # scale_y_break(c(2050,29500),ticklabels = c(29500,30000),scales = 0.1) +
+  labs(x="Size group", y="ratio(system number/plasmids number)") + 
+  theme_bw() + 
+  theme(plot.title = element_text(size = 20, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.title.x = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.title.y = element_text(size = 15, face = "bold", angle = 90, vjust = 0.5, hjust = 0.5),
+        axis.text.x = element_text(size = 10, face = "plain", angle = 90, vjust = 0.5, hjust = 0.5),
+        axis.text.y = element_text(size = 10, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        legend.title = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0),
+        legend.text = element_text(size = 12, face = "bold", angle = 0, vjust = 0.5, hjust = 0),
+        legend.key = element_rect(fill = 'transparent'),
+        legend.position = 'bottom',
+        legend.key.size=unit(0.8,'cm'),
+        legend.key.width=unit(1.2,'cm'),
+        legend.spacing.y = unit(0.5,"cm"),
+        # plot.margin = unit(c(1, 1, 1, 1),'cm'),
+        strip.text.y = element_text(size=15,face = "bold"),
+        strip.text.x = element_text(size=15,face = "bold")
+        )
+
+if(do.write){
+  ggsave(width=25,height=8,filename="../../Results/01.Distribution/size_1.pdf",limitsize = FALSE)
+}
+
+
+
+
+
+
+
+```
+
+***
+
+##### Fin.

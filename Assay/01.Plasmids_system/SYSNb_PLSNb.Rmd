@@ -1,0 +1,297 @@
+---
+title: "System number - Plasmids number"
+author: "[Haotian Zheng](https://github.com/marveloushaotian)"
+date: "`r Sys.Date()`"
+output: html_document
+---
+**This document analysis:**  
+*1.How many plasmids with 0/1/2/3/4/5... defense systems?*  
+*2.*  
+
+***
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figs/',
+                      echo=FALSE, warning=FALSE, message=FALSE) # Need to change the path of the plot.
+
+library(knitr) # evaluate the code, putting the results in a markdown document, which can then be converted to a variety of formats with pandoc.
+library(tidyverse) # including ggplot2,dplyr,tidyr,readr,purrr,tibble,stringr,forcats.
+# Matrix processing
+library(reshape2) # 'melt', 'cast' rebuild database.
+library(plyr)
+library(data.table)
+
+# Statistic.
+library(scales) # generic function whose default method centers and/or scales the columns of a numeric matrix.
+library(psych)
+library(vegan)
+library(randomForest)
+library(caret)
+
+# Visualization.
+library(igraph)
+library(ggrepel) # repel overlapping text labels.
+library(ggthemes) # contains extra themes, scales, and geoms, and functions for and related to ggplot2.
+library(ggpubr) # facilitates the creation of beautiful ggplot2-based graphs.
+library(gg.gap) # Easy to define segments in y-axis for 'ggplot2'.
+library(ggbreak) # Effectively Utilize Plotting Space to Deal With Large Datasets and Outliers.
+library(RColorBrewer)
+library(pheatmap) # A function to draw clustered heatmaps.
+library(gggenes) # provides a 'ggplot2' geom and helper functions for draw- ing gene arrow maps.
+library(gggenomes)
+
+do.write <- F
+options(scipen = 200)
+```
+
+#### Import data.
+```{r}
+# combined_data <- read.delim("../Results/2.Combined_Data/final_combined2.txt",header = T, check.names = F)
+defensefinder_padloc_combined_data <- read.delim("../../Results/00.Original_Data/04.combined_data/DefenseFinder_Padloc_Combine/Final_data.txt",header = T, check.names = F)
+cctyper_data <- read.table("../../Results/00.Original_Data/03.cctyper_data/cctyper_combined_mar.txt",header = T,check.names = F)
+metadata_plsdb <- read.delim("../../Results/00.Original_Data/00.meta_data/plsdb_metadata_mar.txt",header = T,sep = "\t")
+cctyper_data2 <- left_join(cctyper_data[,c(-2)],metadata_plsdb)
+cctyper_data3 <- cctyper_data2 %>% filter(cctyper_data2$Source != "CCTyper_Crispr")
+combined_data <- rbind(defensefinder_padloc_combined_data,cctyper_data3)
+# remove the stange plasmid.
+combined_data2 <- combined_data %>% filter(combined_data$Plasmid_ID != "NZ_CP069303.1")
+# write.table(combined_data2, "../Results/3.Preliminary_Analysis/all_combined_data.txt", sep = "\t", row.names = F)
+
+argonaute_origin <- read.table("../../Results/00.Original_Data/10.argonaute_data/argonaute_origin_data.txt",header = T, check.names = F, sep = "\t")
+argonaute_selected <- read.table("../../Results/00.Original_Data/10.argonaute_data/argonaute_selected_file.txt", header = T, check.names = F, sep = "\t")
+combined_data2 <- read.table("../../Results/00.Original_Data/all_combined_data.txt", header = T, check.names = F, sep = "\t")
+
+origin_metadata <- read_tsv("../../Results/00.Original_Data/00.meta_data/plsdb_filtered.tsv")
+```
+
+***
+
+#### Filter data.
+```{r}
+
+```
+
+***
+
+#### Visualization.
+
+### Find the distribution of the denfence system in plasmids genome.
+*How many defense system in each plasmid.*
+```{r}
+plasmid_dis <- tapply(combined_data2$Plasmid_ID, combined_data2$Plasmid_ID, length) %>% as.data.frame() %>% rownames_to_column("Plasmid_ID")
+plasmid_dis2 <- plasmid_dis %>% dplyr::rename(system_count = ".")
+plasmid_dis2$system_count <- factor(plasmid_dis2$system_count, levels=unique(plasmid_dis2$system_count))
+
+plasmid_dis3 <- tapply(plasmid_dis2$system_count, plasmid_dis2$system_count, length) %>% as.data.frame() %>% rownames_to_column("system_count")
+plasmid_dis4 <- plasmid_dis3 %>% dplyr::rename(plasmid_count = ".")
+plasmid_dis4[14,] <- c(0,(length(metadata_plsdb$Plasmid_ID)-length(plasmid_dis$Plasmid_ID)))
+plasmid_dis4$system_count <- as.numeric(plasmid_dis4$system_count)
+
+# plasmid_dis4$system_count <- ordered(c("0","1", "2", "3", "4", "5","6", "7", "8", "9", "10","11","12","13")) 
+# plasmid_dis4$system_count <- factor(plasmid_dis4$system_count, levels=unique(plasmid_dis4$system_count))
+
+
+# group_mean <- aggregate(length_data$Length, by = list(length_data$Num), mean) #I found that is wrong. dont need to count this thing.
+# group_mean2 <- group_mean %>% rename(Number_of_defense_systems = Group.1, Length_of_genomes = x)
+# group_mean2$Length_of_genomes <- ceiling(group_mean2$Length_of_genomes)
+# group_mean2$Number_of_defense_systems <- as.character(group_mean2$Number_of_defense_systems)
+
+# distri_data$Nb_genomes <- as.character(distri_data$Nb_genomes)
+# distri_data$Nb_defense_systems <- as.character(distri_data$Nb_defense_systems)
+
+ggplot(plasmid_dis4,aes(x=system_count,y=plasmid_count)) + 
+  geom_bar(fill="steelblue",stat = 'identity',width = 0.8) + 
+  geom_text(aes(label=plasmid_count),vjust = -0.2, hjust = 0.5,position = position_dodge2(width = 0.1, preserve = 'single')) + 
+  scale_x_continuous(breaks = c(0:13)) + 
+  scale_y_break(c(2050,29500),ticklabels = c(29500,30000),scales = 0.1) +
+  labs(x="Nb plasmid defense systems", y="Nb plasmid genomes") + 
+  theme_bw() + 
+  theme(plot.title = element_text(size = 20, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.title.x = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.title.y = element_text(size = 15, face = "bold", angle = 90, vjust = 0.5, hjust = 0.5),
+        axis.text.x = element_text(size = 10, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.text.y = element_text(size = 10, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        legend.title = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0),
+        legend.text = element_text(size = 12, face = "bold", angle = 0, vjust = 0.5, hjust = 0),
+        legend.key = element_rect(fill = 'transparent'),
+        legend.position = 'bottom',
+        legend.key.size=unit(0.8,'cm'),
+        legend.key.width=unit(1.2,'cm'),
+        legend.spacing.y = unit(0.5,"cm"),
+        # plot.margin = unit(c(1, 1, 1, 1),'cm'),
+        strip.text.y = element_text(size=15,face = "bold"),
+        strip.text.x = element_text(size=15,face = "bold")
+        )
+if(do.write){
+  ggsave(width=6,height=6,filename="../Results/3.Preliminary_Analysis/Distribution-of-defense-system-in-plasmid-genomes.pdf",limitsize = FALSE)
+}
+```
+
+*Frequency of systems in plasmid genomes.*
+*not too good.*
+
+```{r}
+combined_data3 <- combined_data2
+combined_data3$Plasmid_ID <- as.factor(combined_data3$Plasmid_ID)
+combined_data3$Defense_System_Type <- as.factor(combined_data3$Defense_System_Type)
+# freq_db <- tapply(combined_data3$Defense_System_Type, combined_data3$Defense_System_Type, length) %>% as.data.frame() %>% rownames_to_column("System_name")
+# This method is simple, but the result have redundancy, because one plasmid may have more than one defence system record.
+
+
+
+combined_data4 = as.data.frame(matrix(nrow=50,ncol=2))
+
+for (i in 1:length(levels(combined_data3$Defense_System_Type))) {
+  system_type_name <- levels(droplevels(combined_data3$Defense_System_Type))[i]
+  plasmid_selected_dataframe <- combined_data3 %>% filter(combined_data3$Defense_System_Type == system_type_name)
+  combined_data4$System_type[i] <- system_type_name
+  combined_data4$Occ_in_plasmids[i] <- length(levels(droplevels(plasmid_selected_dataframe$Plasmid_ID)))
+}
+
+combined_data5 <- combined_data4[,c(3,4)]
+combined_data5$Frequency <- round(combined_data5$Occ_in_plasmids/length(unique(combined_data2$Plasmid_ID)),5)*100
+combined_data5$Frequency_in_all_plasmid <- round(combined_data5$Occ_in_plasmids/length(unique(metadata_plsdb$Plasmid_ID)),5)*100
+
+combined_data6 <- combined_data5[order(combined_data5$Frequency,decreasing = T),]
+combined_data6$System_type <- factor(combined_data6$System_type, levels = unique(combined_data6$System_type))
+
+combined_data7 <- melt(combined_data6,id.vars = c("System_type","Occ_in_plasmids"), variable.name = "Type", value.name = "Numbers")
+
+ggplot(combined_data7,aes(x=System_type,y=Numbers,fill=Type)) + 
+  geom_bar(stat = 'identity', position = "stack", width = 0.8) + 
+  # geom_text(aes(label=Frequency),vjust = -0.2, hjust = 0.5,position = position_dodge2(width = 0.1, preserve = 'single')) + 
+  labs(x="Defence system types", y="% of genomes encoding systems") + 
+  theme_bw() + 
+  theme(plot.title = element_text(size = 20, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 15, face = "bold", angle = 90, vjust = 0.5, hjust = 0.5),
+        axis.text.x = element_text(size = 10, face = "bold", angle = 90, vjust = 0.5, hjust = 1),
+        axis.text.y = element_text(size = 10, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        legend.title = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0),
+        legend.text = element_text(size = 12, face = "plain", angle = 0, vjust = 0.5, hjust = 0),
+        legend.key = element_rect(fill = 'transparent'),
+        legend.position = 'bottom',
+        legend.key.size=unit(0.8,'cm'),
+        legend.key.width=unit(1.2,'cm'),
+        legend.spacing.y = unit(0.5,"cm"),
+        # plot.margin = unit(c(1, 1, 1, 1),'cm'),
+        strip.text.y = element_text(size=15,face = "bold"),
+        strip.text.x = element_text(size=15,face = "bold")
+        )
+if(do.write){
+  ggsave(width=12,height=5,filename="../Results/3.Preliminary_Analysis/frequence.pdf",limitsize = FALSE)
+}
+```
+
+### The abundance of defense system in bacteria phylum. (pheatmap) *need to revise it.*
+```{r}
+# Get the absilute numbers of genomes encoding a given system.
+plasmids_number <- combined_data2[,-c(3:18,20)] %>% filter(combined_data2$phylum != "")
+plasmids_number2 <- tapply(plasmids_number$phylum, plasmids_number$phylum, length) %>% as.data.frame() %>% rownames_to_column("Phylum") # Count each plasmid have how many defense systems.
+plasmids_number2 <- plasmids_number2 %>% dplyr::rename(system_count = ".")
+plasmids_number2 <- plasmids_number2 %>% filter(plasmids_number2$system_count > 10)
+
+plasmid_typer_df1 <- plasmids_number %>% filter(plasmids_number$phylum == plasmids_number2$Phylum[1])
+heatmap_Actinobacteria <- tapply(plasmid_typer_df1$Defense_System_Type, plasmid_typer_df1$Defense_System_Type, length) %>% as.data.frame() %>% rownames_to_column("System_name")
+heatmap_Actinobacteria <- heatmap_Actinobacteria %>% dplyr::rename(Actinobacteria = ".")
+plasmid_typer_df1_f <- unique(plasmid_typer_df1)
+heatmap_Actinobacteria_f <- tapply(plasmid_typer_df1_f$Defense_System_Type, plasmid_typer_df1_f$Defense_System_Type, length) %>% as.data.frame() %>% rownames_to_column("System_name")
+heatmap_Actinobacteria_f <- heatmap_Actinobacteria_f %>% dplyr::rename(Actinobacteria = ".")
+heatmap_Actinobacteria_f$Actinobacteria_Frequency <- round(heatmap_Actinobacteria_f$Actinobacteria/length(unique(plasmid_typer_df1$Plasmid_ID)),3)
+
+plasmid_typer_df2 <- plasmids_number %>% filter(plasmids_number$phylum == plasmids_number2$Phylum[2])
+heatmap_Bacteroidetes <- tapply(plasmid_typer_df2$Defense_System_Type, plasmid_typer_df2$Defense_System_Type, length) %>% as.data.frame() %>% rownames_to_column("System_name")
+heatmap_Bacteroidetes <- heatmap_Bacteroidetes %>% dplyr::rename(Bacteroidetes = ".")
+plasmid_typer_df2_f <- unique(plasmid_typer_df2)
+heatmap_Bacteroidetes_f <- tapply(plasmid_typer_df2_f$Defense_System_Type, plasmid_typer_df2_f$Defense_System_Type, length) %>% as.data.frame() %>% rownames_to_column("System_name")
+heatmap_Bacteroidetes_f <- heatmap_Bacteroidetes_f %>% dplyr::rename(Bacteroidetes = ".")
+heatmap_Bacteroidetes_f$Bacteroidetes_Frequency <- round(heatmap_Bacteroidetes_f$Bacteroidetes/length(unique(plasmid_typer_df2$Plasmid_ID)),3)
+
+plasmid_typer_df3 <- plasmids_number %>% filter(plasmids_number$phylum == plasmids_number2$Phylum[3])
+heatmap_Cyanobacteria <- tapply(plasmid_typer_df3$Defense_System_Type, plasmid_typer_df3$Defense_System_Type, length) %>% as.data.frame() %>% rownames_to_column("System_name")
+heatmap_Cyanobacteria <- heatmap_Cyanobacteria %>% dplyr::rename(Cyanobacteria = ".")
+plasmid_typer_df3_f <- unique(plasmid_typer_df3)
+heatmap_Cyanobacteria_f <- tapply(plasmid_typer_df3_f$Defense_System_Type, plasmid_typer_df3_f$Defense_System_Type, length) %>% as.data.frame() %>% rownames_to_column("System_name")
+heatmap_Cyanobacteria_f <- heatmap_Cyanobacteria_f %>% dplyr::rename(Cyanobacteria = ".")
+heatmap_Cyanobacteria_f$Cyanobacteria_Frequency <- round(heatmap_Cyanobacteria_f$Cyanobacteria/length(unique(plasmid_typer_df3$Plasmid_ID)),3)
+
+plasmid_typer_df4 <- plasmids_number %>% filter(plasmids_number$phylum == plasmids_number2$Phylum[4])
+heatmap_Deinococcus_Thermus <- tapply(plasmid_typer_df4$Defense_System_Type, plasmid_typer_df4$Defense_System_Type, length) %>% as.data.frame() %>% rownames_to_column("System_name")
+heatmap_Deinococcus_Thermus <- heatmap_Deinococcus_Thermus %>% dplyr::rename(Deinococcus_Thermus = ".")
+plasmid_typer_df4_f <- unique(plasmid_typer_df4)
+heatmap_Deinococcus_Thermus_f <- tapply(plasmid_typer_df4_f$Defense_System_Type, plasmid_typer_df4_f$Defense_System_Type, length) %>% as.data.frame() %>% rownames_to_column("System_name")
+heatmap_Deinococcus_Thermus_f <- heatmap_Deinococcus_Thermus_f %>% dplyr::rename(Deinococcus_Thermus = ".")
+heatmap_Deinococcus_Thermus_f$Deinococcus_Thermus_Frequency <- round(heatmap_Deinococcus_Thermus_f$Deinococcus_Thermus/length(unique(plasmid_typer_df4$Plasmid_ID)),3)
+
+plasmid_typer_df5 <- plasmids_number %>% filter(plasmids_number$phylum == plasmids_number2$Phylum[5])
+heatmap_Firmicutes <- tapply(plasmid_typer_df5$Defense_System_Type, plasmid_typer_df5$Defense_System_Type, length) %>% as.data.frame() %>% rownames_to_column("System_name")
+heatmap_Firmicutes <- heatmap_Firmicutes %>% dplyr::rename(Firmicutes = ".")
+plasmid_typer_df5_f <- unique(plasmid_typer_df5)
+heatmap_Firmicutes_f <- tapply(plasmid_typer_df5_f$Defense_System_Type, plasmid_typer_df5_f$Defense_System_Type, length) %>% as.data.frame() %>% rownames_to_column("System_name")
+heatmap_Firmicutes_f <- heatmap_Firmicutes_f %>% dplyr::rename(Firmicutes = ".")
+heatmap_Firmicutes_f$Firmicutes_Frequency <- round(heatmap_Firmicutes_f$Firmicutes/length(unique(plasmid_typer_df5$Plasmid_ID)),3)
+
+
+plasmid_typer_df6 <- plasmids_number %>% filter(plasmids_number$phylum == plasmids_number2$Phylum[6])
+heatmap_Proteobacteria <- tapply(plasmid_typer_df6$Defense_System_Type, plasmid_typer_df6$Defense_System_Type, length) %>% as.data.frame() %>% rownames_to_column("System_name")
+heatmap_Proteobacteria <- heatmap_Proteobacteria %>% dplyr::rename(Proteobacteria = ".")
+plasmid_typer_df6_f <- unique(plasmid_typer_df6)
+heatmap_Proteobacteria_f <- tapply(plasmid_typer_df6_f$Defense_System_Type, plasmid_typer_df6_f$Defense_System_Type, length) %>% as.data.frame() %>% rownames_to_column("System_name")
+heatmap_Proteobacteria_f <- heatmap_Proteobacteria_f %>% dplyr::rename(Proteobacteria = ".")
+heatmap_Proteobacteria_f$Proteobacteria_Frequency <- round(heatmap_Proteobacteria_f$Proteobacteria/length(unique(plasmid_typer_df6$Plasmid_ID)),3)
+
+# all_joined_heatmapplot <- merge(heatmap_Proteobacteria,heatmap_Firmicutes,heatmap_Deinococcus_Thermus,heatmap_Cyanobacteria,heatmap_Bacteroidetes,heatmap_Actinobacteria)
+
+data1 <- left_join(heatmap_Proteobacteria,heatmap_Firmicutes)
+data2 <- left_join(data1,heatmap_Deinococcus_Thermus)
+data3 <- left_join(data2,heatmap_Cyanobacteria)
+data4 <- left_join(data3,heatmap_Bacteroidetes)
+data5 <- left_join(data4,heatmap_Actinobacteria)
+data5[is.na(data5)] <- 0
+data5$Proteobacteria <- as.numeric(data5$Proteobacteria)
+data6 <- data5 %>% column_to_rownames("System_name") %>% t() %>% as.data.frame()
+
+data1_f <- left_join(heatmap_Proteobacteria_f,heatmap_Firmicutes_f)
+data2_f <- left_join(data1_f,heatmap_Deinococcus_Thermus_f)
+data3_f <- left_join(data2_f,heatmap_Cyanobacteria_f)
+data4_f <- left_join(data3_f,heatmap_Bacteroidetes_f)
+data5_f <- left_join(data4_f,heatmap_Actinobacteria_f)
+data5_f[is.na(data5_f)] <- 0
+data6_f <- data5_f[,c(1,3,5,7,9,11,13)] %>% column_to_rownames("System_name") %>% t() %>% as.data.frame()
+row.names(data6_f) <- c("Proteobacteria","Firmicutes","Deinococcus_Thermus","Cyanobacteria","Bacteroidetes","Actinobacteria")
+```
+
+```{r}
+# visualize.
+# data7 <- decostand(data6,"standardize",MARGIN = 1)
+
+data6_f2 <- as.matrix(data6_f)
+data6_2 <- as.matrix(data6)
+
+map <- pheatmap(data6_f2,
+         cluster_rows = F, cluster_cols = F,
+         color = colorRampPalette(c("#fdf2ef", "#e04320", "firebrick3"))(50),
+         border=FALSE,
+         display_numbers = data6_2, number_color = "black",
+         cellwidth = 25, cellheight = 25
+         )
+
+save_pheatmap_pdf <- function(x, filename, width=20, height=6) {
+   stopifnot(!missing(x))
+   stopifnot(!missing(filename))
+   pdf(filename, width=width, height=height)
+   grid::grid.newpage()
+   grid::grid.draw(x$gtable)
+   dev.off()
+}
+
+
+
+save_pheatmap_pdf(map, "../Results/3.Preliminary_Analysis/pheatmap.pdf")
+
+```
+
+
+***
+
+##### Fin.

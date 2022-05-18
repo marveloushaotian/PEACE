@@ -1,0 +1,148 @@
+---
+title: "System number - Plasmids families"
+author: "[Haotian Zheng](https://github.com/marveloushaotian)"
+date: "`r Sys.Date()`"
+output: html_document
+---
+**This document analysis:**  
+*1.*  
+*2.*  
+
+***
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figs/',
+                      echo=FALSE, warning=FALSE, message=FALSE) # Need to change the path of the plot.
+
+library(knitr) # evaluate the code, putting the results in a markdown document, which can then be converted to a variety of formats with pandoc.
+library(tidyverse) # including ggplot2,dplyr,tidyr,readr,purrr,tibble,stringr,forcats.
+# Matrix processing
+library(reshape2) # 'melt', 'cast' rebuild database.
+library(plyr)
+library(data.table)
+
+# Statistic.
+library(scales) # generic function whose default method centers and/or scales the columns of a numeric matrix.
+library(psych)
+library(vegan)
+library(randomForest)
+library(caret)
+
+# Visualization.
+library(igraph)
+library(ggrepel) # repel overlapping text labels.
+library(ggthemes) # contains extra themes, scales, and geoms, and functions for and related to ggplot2.
+library(ggpubr) # facilitates the creation of beautiful ggplot2-based graphs.
+library(gg.gap) # Easy to define segments in y-axis for 'ggplot2'.
+library(ggbreak) # Effectively Utilize Plotting Space to Deal With Large Datasets and Outliers.
+library(RColorBrewer)
+library(pheatmap) # A function to draw clustered heatmaps.
+library(gggenes) # provides a 'ggplot2' geom and helper functions for draw- ing gene arrow maps.
+library(gggenomes)
+
+do.write <- F
+options(scipen = 200)
+```
+
+#### Import data.
+```{r}
+# combined_data <- read.delim("../Results/2.Combined_Data/final_combined2.txt",header = T, check.names = F)
+defensefinder_padloc_combined_data <- read.delim("../../Results/00.Original_Data/04.combined_data/DefenseFinder_Padloc_Combine/Final_data.txt",header = T, check.names = F)
+cctyper_data <- read.table("../../Results/00.Original_Data/03.cctyper_data/cctyper_combined_mar.txt",header = T,check.names = F)
+metadata_plsdb <- read.delim("../../Results/00.Original_Data/00.meta_data/plsdb_metadata_mar.txt",header = T,sep = "\t")
+cctyper_data2 <- left_join(cctyper_data[,c(-2)],metadata_plsdb)
+cctyper_data3 <- cctyper_data2 %>% filter(cctyper_data2$Source != "CCTyper_Crispr")
+combined_data <- rbind(defensefinder_padloc_combined_data,cctyper_data3)
+# remove the stange plasmid.
+combined_data2 <- combined_data %>% filter(combined_data$Plasmid_ID != "NZ_CP069303.1")
+# write.table(combined_data2, "../Results/3.Preliminary_Analysis/all_combined_data.txt", sep = "\t", row.names = F)
+
+argonaute_origin <- read.table("../../Results/00.Original_Data/10.argonaute_data/argonaute_origin_data.txt",header = T, check.names = F, sep = "\t")
+argonaute_selected <- read.table("../../Results/00.Original_Data/10.argonaute_data/argonaute_selected_file.txt", header = T, check.names = F, sep = "\t")
+combined_data2 <- read.table("../../Results/00.Original_Data/all_combined_data.txt", header = T, check.names = F, sep = "\t")
+
+origin_metadata <- read_tsv("../../Results/00.Original_Data/00.meta_data/plsdb_filtered.tsv")
+
+#---------------
+
+
+metadata_origin <- read_tsv("../../Results/00.Original_Data/00.meta_data/plsdb_filtered.tsv")
+combine_data <- read.table("../../Results/00.Original_Data/all_combined_data.txt",header = T,check.names = F,sep = "\t")
+metadata_origin <- metadata_origin %>% dplyr::rename(Plasmid_ID=ACC_NUCCORE)
+metadata_origin_sel <- metadata_origin[,c(1,11)]
+combine_data_sel <- combine_data[,c(1,2)] %>% unique()
+combine_inc <- left_join(metadata_origin_sel,combine_data_sel)
+combine_inc <- combine_inc %>% dplyr::rename(Group=Defense_System_Type)
+inc_plasmids2 <- combine_inc[grepl("Inc|Col", combine_inc$plasmidfinder), ]
+inc_plasmids2[is.na(inc_plasmids2)] <- "None"
+```
+
+***
+
+#### Filter data.
+```{r}
+
+```
+
+***
+
+#### Visualization.
+```{r}
+inc_plasmids2$plasmidfinder <- gsub("ColRNAI_rep_cluster_[0-9]*", "ColRNAI", inc_plasmids2$plasmidfinder)
+
+randomize <- function(x){
+    df <- inc_plasmids
+    df$CRISPRorCas <- sample(df$CRISPRorCas)
+    res <- data.frame(table(unlist(lapply(as.character(df[df$CRISPRorCas, "Inc"]), function(x) strsplit(x, ",")))))
+    return(res)
+}
+
+obs_inc <- data.frame(table(unlist(lapply(as.character(inc_plasmids[inc_plasmids$CRISPRorCas, "Inc"]),
+                                         function(x) strsplit(x, ",")))))
+
+set.seed(42)
+rand_inc <- lapply(1:1000, randomize)
+
+test <- Reduce(function(x, y) merge(x, y, by = "Var1", all = TRUE), rand_inc)
+test[is.na(test)] <- 0
+
+random_inc <- data.frame(Inc = test$Var1,
+                         Freq = rowMeans(test[, -1]),
+                         Freq.sd = apply(test[, -1], 1, sd))
+
+combine_inc <- merge(obs_inc, random_inc, by.x = "Var1", by.y = "Inc", all = TRUE)
+combine_inc <- combine_inc[!grepl("rep", combine_inc$Var1), ]
+combine_inc[is.na(combine_inc$Freq.x), "Freq.x"] <- 0
+
+combine_inc$Ratio <- combine_inc$Freq.x - combine_inc$Freq.y
+combine_inc$Rand_max <- (combine_inc$Freq.y + combine_inc$Freq.sd)
+combine_inc$Rand_min <- (combine_inc$Freq.y - combine_inc$Freq.sd)
+combine_inc[combine_inc$Rand_min < 0, "Rand_min"] <- 0
+
+combine_inc$Ratio_max <- combine_inc$Freq.x - combine_inc$Rand_min
+combine_inc$Ratio_min <- combine_inc$Freq.x - combine_inc$Rand_max
+
+combine_inc$Var1 <- as.character(combine_inc$Var1)
+
+inc_prev <- data.frame(table(unlist(lapply(as.character(inc_plasmids$Inc), function(x) strsplit(x, ",")))))
+inc_prev <- inc_prev[!grepl("rep", inc_prev$Var1), ]
+
+combine_inc <- merge(combine_inc, inc_prev, by = "Var1")
+
+combine_inc$IncN <- paste0(combine_inc$Var1, " (n=", combine_inc$Freq, ")")
+
+p <- ggplot(combine_inc, aes(IncN, Ratio, ymin = Ratio_min, ymax = Ratio_max)) +
+    theme_bw() +
+    geom_point() +
+    geom_errorbar() +
+    coord_flip() +
+    ylab("Difference (Observed - Random)") +
+    xlab(NULL)
+p
+ggsave(p, file = "../Figures/Fig2_inc_all_supp.pdf", width = 16, height = 16, units = "cm")
+write.csv(inc_plasmids[, c("Inc", "CRISPRorCas")], file = "../Tables/Fig2_Inc.csv", quote = FALSE, row.names = FALSE)
+```
+
+***
+
+##### Fin.
