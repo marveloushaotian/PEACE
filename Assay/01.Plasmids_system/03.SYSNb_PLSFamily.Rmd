@@ -5,7 +5,7 @@ date: "`r Sys.Date()`"
 output: html_document
 ---
 **This document analysis:**  
-*1.*  
+*1.Make a Plasmids family data sheet.*  
 *2.*  
 
 ***
@@ -46,35 +46,20 @@ options(scipen = 200)
 
 #### Import data.
 ```{r}
-# combined_data <- read.delim("../Results/2.Combined_Data/final_combined2.txt",header = T, check.names = F)
-defensefinder_padloc_combined_data <- read.delim("../../Results/00.Original_Data/04.combined_data/DefenseFinder_Padloc_Combine/Final_data.txt",header = T, check.names = F)
-cctyper_data <- read.table("../../Results/00.Original_Data/03.cctyper_data/cctyper_combined_mar.txt",header = T,check.names = F)
-metadata_plsdb <- read.delim("../../Results/00.Original_Data/00.meta_data/plsdb_metadata_mar.txt",header = T,sep = "\t")
-cctyper_data2 <- left_join(cctyper_data[,c(-2)],metadata_plsdb)
-cctyper_data3 <- cctyper_data2 %>% filter(cctyper_data2$Source != "CCTyper_Crispr")
-combined_data <- rbind(defensefinder_padloc_combined_data,cctyper_data3)
-# remove the stange plasmid.
-combined_data2 <- combined_data %>% filter(combined_data$Plasmid_ID != "NZ_CP069303.1")
-# write.table(combined_data2, "../Results/3.Preliminary_Analysis/all_combined_data.txt", sep = "\t", row.names = F)
-
-argonaute_origin <- read.table("../../Results/00.Original_Data/10.argonaute_data/argonaute_origin_data.txt",header = T, check.names = F, sep = "\t")
-argonaute_selected <- read.table("../../Results/00.Original_Data/10.argonaute_data/argonaute_selected_file.txt", header = T, check.names = F, sep = "\t")
 combined_data2 <- read.table("../../Results/00.Original_Data/all_combined_data.txt", header = T, check.names = F, sep = "\t")
-
 origin_metadata <- read_tsv("../../Results/00.Original_Data/00.meta_data/plsdb_filtered.tsv")
 
-#---------------
 
 
-metadata_origin <- read_tsv("../../Results/00.Original_Data/00.meta_data/plsdb_filtered.tsv")
-combine_data <- read.table("../../Results/00.Original_Data/all_combined_data.txt",header = T,check.names = F,sep = "\t")
-metadata_origin <- metadata_origin %>% dplyr::rename(Plasmid_ID=ACC_NUCCORE)
-metadata_origin_sel <- metadata_origin[,c(1,11)]
-combine_data_sel <- combine_data[,c(1,2)] %>% unique()
-combine_inc <- left_join(metadata_origin_sel,combine_data_sel)
-combine_inc <- combine_inc %>% dplyr::rename(Group=Defense_System_Type)
-inc_plasmids2 <- combine_inc[grepl("Inc|Col", combine_inc$plasmidfinder), ]
-inc_plasmids2[is.na(inc_plasmids2)] <- "None"
+# metadata_origin <- read_tsv("../../Results/00.Original_Data/00.meta_data/plsdb_filtered.tsv")
+# combine_data <- read.table("../../Results/00.Original_Data/all_combined_data.txt",header = T,check.names = F,sep = "\t")
+# metadata_origin <- metadata_origin %>% dplyr::rename(Plasmid_ID=ACC_NUCCORE)
+# metadata_origin_sel <- metadata_origin[,c(1,11)]
+# combine_data_sel <- combine_data[,c(1,2)] %>% unique()
+# combine_inc <- left_join(metadata_origin_sel,combine_data_sel)
+# combine_inc <- combine_inc %>% dplyr::rename(Group=Defense_System_Type)
+# inc_plasmids2 <- combine_inc[grepl("Inc|Col", combine_inc$plasmidfinder), ]
+# inc_plasmids2[is.na(inc_plasmids2)] <- "None"
 ```
 
 ***

@@ -46,7 +46,10 @@ options(scipen = 200)
 
 #### Import data.
 ```{r}
+metadata_origin <- read_tsv("../../Results/00.Original_Data/00.meta_data/plsdb_filtered.tsv")
 
+metadata <- read.delim("../../Results/00.Original_Data/00.meta_data/plsdb_metadata_inuse.txt",header = T,check.names = F,sep = "\t")
+combine_data <- read.table("../../Results/00.Original_Data/all_combined_data.txt",header = T,check.names = F,sep = "\t")
 ```
 
 ***

@@ -1384,12 +1384,20 @@ if(do.write){
 ```
 
 
-
-
-
-
-
-
+#### Get the final output.
+```{r}
+defensefinder_padloc_combined_data <- read.delim("../../Results/00.Original_Data/04.combined_data/DefenseFinder_Padloc_Combine/Final_data.txt",header = T, check.names = F)
+cctyper_data <- read.table("../../Results/00.Original_Data/03.cctyper_data/cctyper_combined_mar.txt",header = T,check.names = F)
+metadata_plsdb <- read.delim("../../Results/00.Original_Data/00.meta_data/plsdb_metadata_mar.txt",header = T,sep = "\t")
+cctyper_data2 <- left_join(cctyper_data[,c(-2)],metadata_plsdb)
+cctyper_data3 <- cctyper_data2 %>% filter(cctyper_data2$Source != "CCTyper_Crispr")
+combined_data <- rbind(defensefinder_padloc_combined_data,cctyper_data3)
+# remove the stange plasmid.
+combined_data2 <- combined_data %>% filter(combined_data$Plasmid_ID != "NZ_CP069303.1")
+if (do.write) {
+  write.table(combined_data2, "../../Results/00.Original_Data/all_combined_data.txt", sep = "\t", row.names = F)
+}
+```
 
 
 
@@ -1536,23 +1544,6 @@ if(do.write){
 <!-- No_overlap_final_data <- rbind(No_overlap_same_type_same_source2,No_overlap_same_type_diff_source2,No_overlap_diff_type_keep_both2) %>% unique() -->
 <!-- ``` -->
 
-#### See.
-```{r}
-testdata <- read.table("../Results/2.Combined_Data/Process_file/combine_padloc_defensefinder_original.txt", header = T)
-Included_final_data2 <- testdata %>% dplyr::group_by(testdata$Plasmid_ID) %>% dplyr::mutate(count=n()) %>% dplyr::filter(count>1) %>% select(-count) %>% as.data.frame() # Select the plasmids have mutiple systems. only there are 225 records.
-Included_final_data2$Plasmid_ID <- as.factor(Included_final_data2$Plasmid_ID)
-Included_final_data2$Plasmid_ID <- droplevels(Included_final_data2$Plasmid_ID)
-Included_final_data2 <- Included_final_data2[order(Included_final_data2$Plasmid_ID),]
-Included_final_data2$System_Beg <- as.numeric(Included_final_data2$System_Beg)
-Included_final_data2$System_End <- as.numeric(Included_final_data2$System_End)
 
-for (i in 1:475) {
-  Included_final_data3 <- Included_final_data2[c((i*10):((i+1)*10)),]
-  ggplot(Included_final_data3, aes(xmin = System_Beg, xmax = System_End, y = Plasmid_ID, fill = Defense_System_Type)) +
-    geom_gene_arrow() +
-    facet_wrap(~ Plasmid_ID, scales = "free", ncol = 1) +
-    # scale_fill_brewer(palette = "Set3") +
-    theme_genes()
-  ggsave(width=6,height=8,filename=paste0("../Results/3.Preliminary_Analysis/GeneMap_Test/plot_",i,".pdf"),limitsize = FALSE)
-}
-```
+
+#### Fin.

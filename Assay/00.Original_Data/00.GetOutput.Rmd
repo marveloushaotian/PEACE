@@ -61,6 +61,9 @@ find *.fna | parallel -j 15 -I% --max-args 1 padloc --fna %
 awk '/^>/&&NR>1{print "";}{printf "%s",/^>/ ? $0"%":$0}' plsdb.fna > plsdb_one_line.fna
 ## Step 2:
 awk -F"%" '{print $1"\t"length($2)}' plsdb_one_line.fna > plsdb_one_line_count.fna
+
+
+
 ```
 
 #### defensefinder
@@ -77,8 +80,9 @@ find *.fna | parallel -j 5 -I% --max-args 1 prodigal -i % -o %.genes -a %.protei
 ```{bash,eval=FALSE}
 cctyper plsdb.fna all_plasmid_result
 ```
----
 
+
+***
 
 ### Modify three final output file, prepare for the combination.
 #### padloc
