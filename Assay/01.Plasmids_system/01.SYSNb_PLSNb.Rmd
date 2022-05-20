@@ -47,9 +47,7 @@ options(scipen = 200)
 #### Import data.
 ```{r}
 combined_data2 <- read.table("../../Results/00.Original_Data/all_combined_data.txt", header = T, check.names = F, sep = "\t")
-combined_data2
-origin_metadata <- read_tsv("../../Results/00.Original_Data/00.meta_data/plsdb_filtered.tsv")
-origin_metadata
+metadata <- read.delim("../../Results/00.Original_Data/00.meta_data/plsdb_metadata_inuse.txt",header = T,check.names = F,sep = "\t")
 ```
 
 ***
@@ -100,6 +98,67 @@ if(do.write){
 }
 ```
 ### what is the meaning of it.
+
+
+
+#### The composition of plasmids in bacteria env using own defensesystem database.
+```{r}
+Get_composition <- combined_data2[,-c(2:12)] %>% filter(combined_data2$phylum != "")
+# write.table(Get_composition,"../Results/3.Preliminary_Analysis/plasmid_composition.txt",row.names = F,sep = "\t")
+
+Get_composition <- unique(Get_composition)
+# Get_composition$phylum <- as.factor(Get_composition$phylum)
+Get_composition$CountTag <- 1
+Phylum_count_own <- aggregate(Get_composition$CountTag, by = list(as.factor(Get_composition$phylum)), sum)
+Phylum_count_own2 <- Phylum_count_own %>% dplyr::rename(Bacteria = Group.1, Number = x)
+Phylum_count_own3 <- Phylum_count_own2 %>% filter(Phylum_count_own2$Number > 2)
+Phylum_count_own3_2 <- Phylum_count_own2 %>% filter(Phylum_count_own2$Number <= 2)
+Phylum_count_own3$Bacteria <- as.character(Phylum_count_own3$Bacteria)
+Phylum_count_own4 <- rbind(Phylum_count_own3,c("Others",sum(Phylum_count_own3_2$Number)))
+Phylum_count_own4$Number <- as.numeric(Phylum_count_own4$Number)
+Phylum_count_own4$percent <- percent(Phylum_count_own4$Number/sum(Phylum_count_own4$Number))
+Phylum_count_own5 <- Phylum_count_own4 %>% filter(Phylum_count_own4$Bacteria != "Others")
+
+Phylum_count_own5 <- Phylum_count_own5[order(Phylum_count_own5$Number,decreasing = T),]
+Phylum_count_own5$Bacteria <- factor(Phylum_count_own5$Bacteria, levels = unique(Phylum_count_own5$Bacteria))
+Phylum_count_own6 <- rbind(Phylum_count_own5,Phylum_count_own4[10,])
+
+ggplot(Phylum_count_own6, aes(x=" ", y=Number, fill=Bacteria)) + 
+  geom_bar(width = 1, stat = "identity") + 
+  coord_polar("y", start=0) + 
+  scale_fill_manual(values=c(color10)) + 
+  # theme_bw() + 
+  # geom_text(aes(x=1,label=as.character(Phylum_count_own6$percent)),
+            # position = position_stack(reverse =F,vjust=0.5),size=6) + 
+  theme(plot.title = element_text(size = 12, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 12, face = "plain", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.ticks = element_blank(),
+        legend.title = element_text(size = 12, face = "bold", angle = 0, vjust = 0.5, hjust = 0),
+        legend.text = element_text(size = 12, face = "plain", angle = 0, vjust = 0.5, hjust = 0),
+        legend.key = element_rect(fill = 'transparent'),
+        panel.background = element_rect(I(0)),
+        legend.position = 'right',
+        legend.key.size=unit(0.8,'cm'),
+        legend.key.width=unit(0.8,'cm'),
+        legend.spacing.y = unit(0.3,"cm"),
+        # plot.margin = unit(c(1, 1, 1, 1),'cm'),
+        strip.text.y = element_text(size=15,face = "bold"),
+        strip.text.x = element_text(size=15,face = "bold")
+        )
+
+if(do.write){
+  ggsave(width=8,height=6,filename="../../Results/01.Plasmids_system/Plasmid_system_composition.pdf",limitsize = FALSE)
+}
+
+```
+
+
+
+
+
 
 
 *Frequency of systems in plasmid genomes.*
