@@ -60,7 +60,29 @@ options(scipen = 200)
 
 #### Visualization.
 ```{r}
-
+ggplot(plot_data,aes(x=var1,y=var2)) + 
+  # geom_bar(fill="steelblue",stat = 'identity',width = 0.8) +
+  geom_text(aes(label=var1),vjust = -0.2, hjust = 0.5,position = position_dodge2(width = 0.1, preserve = 'single')) + 
+  # scale_x_continuous(breaks = c(0:13)) + 
+  # scale_y_break(c(2050,29500),ticklabels = c(29500,30000),scales = 0.1) +
+  labs(x="Size group", y="ratio(system number/plasmids number)") + 
+  theme_bw() + 
+  theme(plot.title = element_text(size = 20, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.title.x = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        axis.title.y = element_text(size = 15, face = "bold", angle = 90, vjust = 0.5, hjust = 0.5),
+        axis.text.x = element_text(size = 10, face = "plain", angle = 90, vjust = 0.5, hjust = 0.5),
+        axis.text.y = element_text(size = 10, face = "bold", angle = 0, vjust = 0.5, hjust = 0.5),
+        legend.title = element_text(size = 15, face = "bold", angle = 0, vjust = 0.5, hjust = 0),
+        legend.text = element_text(size = 12, face = "bold", angle = 0, vjust = 0.5, hjust = 0),
+        legend.key = element_rect(fill = 'transparent'),
+        legend.position = 'bottom',
+        legend.key.size=unit(0.8,'cm'),
+        legend.key.width=unit(1.2,'cm'),
+        legend.spacing.y = unit(0.5,"cm"),
+        # plot.margin = unit(c(1, 1, 1, 1),'cm'),
+        strip.text.y = element_text(size=15,face = "bold"),
+        strip.text.x = element_text(size=15,face = "bold")
+        )
 ```
 
 ***
