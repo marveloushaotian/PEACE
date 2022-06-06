@@ -4,11 +4,26 @@ author: "[Haotian Zheng](https://github.com/marveloushaotian)"
 date: "`r Sys.Date()`"
 output: html_document
 ---
-**This document analysis:**  
-*1.If the plamids size getting larger, how is the defense systems number going?*  
-*2.What is the density of each defense system in the plasmids genome?*  
 
-***
+**This document analysis Distribution of defense systems number in different Plasmids size/Host bacteria size:**
+
+**AccNb**: The **accurate** number of each kind of defense systems in plasmids.
+
+**FreqNb**: The **Occ.** number of each kind of defense systems in plasmids (Each kind of defense systems only count once).
+
+Use **top 10 abundance** defense systems as input.
+
+1.  
+
+2.  Among the plasmids with defense systems, what is the distribution of **AccNb** and the ratio.
+
+3.  Among the plasmids with defense systems, what is the distribution of **AccNb** and the ratio that **normalized**.
+
+4.  Among the plasmids with defense systems, what is the distribution of **FreqNb** and the ratio.
+
+5.  What is the distribution of AccNb in **host**?
+
+------------------------------------------------------------------------
 
 ```{r global_options, include=FALSE}
 knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figs/',
@@ -46,31 +61,28 @@ library(COEF)
 
 do.write <- F
 options(scipen = 200)
-
-
-color10 <- c('#8DD3C7', '#FFFFB3', '#BEBADA', '#FB8072', '#80B1D3', '#FDB462', '#B3DE69', '#FCCDE5', '#BC80BD', '#CCEBC5', 'gray')
 ```
 
 #### Import data.
+
 ```{r}
 metadata <- read.delim("../../Results/00.Original_Data/00.meta_data/plsdb_metadata_inuse.txt",header = T,check.names = F,sep = "\t")
 combined_data2 <- read.table("../../Results/00.Original_Data/all_combined_data.txt",header = T,check.names = F,sep = "\t")
 ```
 
-***
+------------------------------------------------------------------------
 
 #### Filter data.
 
-***
+------------------------------------------------------------------------
 
 #### Visualization.
-### The distribution of the defense system and plasmids genome with genome size.
-### Plasmid Size - Plasmids number/Defence system number.
-*how many plasmid have the same plasmid size range.*
-*how many system have the same plasmid size range.*
-*make the scales more details.*
-# The plasmid size and the plasmids number and defence systems number.
 
+### The distribution of the defense system and plasmids genome with genome size.
+
+### Plasmid Size - Plasmids number/Defence system number.
+
+*how many plasmid have the same plasmid size range.* *how many system have the same plasmid size range.* *make the scales more details.* \# The plasmid size and the plasmids number and defence systems number.
 
 ```{r}
 # combined_data3 <- combined_data2 %>% filter(combined_data2$Defense_System_Type == "ARGONAUTE")
@@ -111,9 +123,8 @@ if(do.write){
 }
 ```
 
-
-
 ### normalize size plot. rate.
+
 ```{r}
 combine_data <- read.table("../../Results/00.Original_Data/all_combined_data.txt",header = T,check.names = F,sep = "\t")
 plsdb_ori <- read.delim2("../../Results/00.Original_Data/00.meta_data/plsdb_metadata_inuse.txt", header = T, check.names = F, sep = "\t")
@@ -215,11 +226,6 @@ if(do.write){
 }
 ```
 
-
-
-
-
-
-***
+------------------------------------------------------------------------
 
 ##### Fin.

@@ -4,11 +4,16 @@ author: "[Haotian Zheng](https://github.com/marveloushaotian)"
 date: "`r Sys.Date()`"
 output: html_document
 ---
-**This document analysis:**  
-*1.*  
-*2.*  
 
-***
+**This document analysis:**
+
+1.  What is the systems average length in plasmids and chromosome?
+
+2.  What is the systems average number?
+
+3.  A **summary** plot: Among the plasmids have defense systems, what is the distribution of **AccNb** in different kind of **plasmids**(abundance) and different kind of **host**?
+
+------------------------------------------------------------------------
 
 ```{r global_options, include=FALSE}
 knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figs/',
@@ -40,29 +45,33 @@ library(pheatmap) # A function to draw clustered heatmaps.
 library(gggenes) # provides a 'ggplot2' geom and helper functions for draw- ing gene arrow maps.
 library(gggenomes)
 
+color10 <- c('#8DD3C7', '#FFFFB3', '#BEBADA', '#FB8072', '#80B1D3', '#FDB462', '#B3DE69', '#FCCDE5', '#BC80BD', '#CCEBC5', 'gray')
 do.write <- F
 options(scipen = 200)
 ```
 
 #### Import data.
+
 ```{r}
 
 ```
 
-***
+------------------------------------------------------------------------
 
 #### Filter data.
+
 ```{r}
 
 ```
 
-***
+------------------------------------------------------------------------
 
 #### Visualization.
+
 ```{r}
 
 ```
 
-***
+------------------------------------------------------------------------
 
 ##### Fin.
